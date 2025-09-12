@@ -1,0 +1,6 @@
+**/__pycache__/
+**/target/
+**/bin/
+**/node_modules/
+*.o
+*.a
