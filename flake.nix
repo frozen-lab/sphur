@@ -10,11 +10,19 @@
         pkgs = import nixpkgs { inherit system; };
       in {
         devShells = {
-        rs = pkgs.mkShell {
-          name = "dev-rust";
+        asm = pkgs.mkShell {
+          name = "dev-asm";
           buildInputs = with pkgs; [
+            # c/asm
+            nasm
             gcc
+            gcc.libc
+            gdb
+            glibc.static
+            perf
             pkg-config
+            
+            # rust
             rustc
             cargo
             rustfmt
@@ -25,7 +33,9 @@
           shellHook = ''
             export RUST_BACKTRACE=1
               
-            echo " : $(rustc --version | cut -d' ' -f2)"
+            echo " : $(rustc --version)"
+            echo " : $(nasm --version)"
+            echo " : $(gcc --version)"
           '';
         };
         py = pkgs.mkShell {
@@ -54,21 +64,6 @@
 
            shellHook = ''
             echo " : $(node --version)"
-          '';
-        };
-        c = pkgs.mkShell {
-          name = "dev-c";
-          buildInputs = with pkgs; [
-            nasm
-            gcc
-            gcc.libc
-            gdb
-            glibc.static
-            perf
-          ];
-
-          shellHook = ''
-            echo " : $(gcc --version)"
           '';
         };
       };
