@@ -1,0 +1,8 @@
+global asm_add_one
+
+section .text
+asm_add_one:
+        mov rax, rdi
+        add rax, 0x01
+        ret
+        
