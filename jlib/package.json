@@ -1,0 +1,25 @@
+{
+  "name": "sphur",
+  "version": "0.0.1",
+  "description": "High performance PRNG lib written with raw SIMD (x86 and NEON)",
+  "main": "index.js",
+  "scripts": {
+    "install": "node-gyp rebuild"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/frozen-lab/sphur.git#master"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/frozen-lab/sphur/issues"
+  },
+  "gypfile": true,
+  "dependencies": {
+    "bindings": "^1.5.0",
+    "node-addon-api": "^8.5.0",
+    "node-gyp": "^11.4.2"
+  },
+  "homepage": "https://github.com/frozen-lab/sphur/tree/master#readme"
+}

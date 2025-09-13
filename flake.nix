@@ -28,6 +28,16 @@
             rustfmt
             clippy
             rust-analyzer
+
+            # python
+            python314
+            ruff
+            uv
+            pyright
+
+            # js/ts
+            nodejs
+            typescript
           ];
 
           shellHook = ''
@@ -36,33 +46,7 @@
             echo " : $(rustc --version)"
             echo " : $(nasm --version)"
             echo " : $(gcc --version)"
-          '';
-        };
-        py = pkgs.mkShell {
-          name = "dev-python";
-          buildInputs = with pkgs; [
-            gcc
-            pkg-config
-            python314
-            ruff
-            uv
-            pyright
-          ];
-
-           shellHook = ''
             echo " : $(python3 --version)"
-          '';
-        };
-        js = pkgs.mkShell {
-          name = "dev-js";
-          buildInputs = with pkgs; [
-            gcc
-            pkg-config
-            nodejs
-            typescript
-          ];
-
-           shellHook = ''
             echo " : $(node --version)"
           '';
         };
