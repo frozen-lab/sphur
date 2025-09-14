@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ "master" ]
 
+  # allow manual trigger
+  workflow_dispatch:
+
 jobs:
   clib-test:
     strategy:
@@ -20,11 +23,24 @@ jobs:
           - os: windows-latest
             arch: x86_64
             use-flake: false
+
+          - os: macos-13
+            arch: x86_64
+            use-flake: true
             
     runs-on: ${{ matrix.os }}
     
     steps:
       - uses: actions/checkout@v4
+
+      # MacOS x86_64 CPU check
+      - name: Validate CPU Arch for MacOS (x84_64)
+        if: matrix.os == 'macos-13'
+        run: |
+          if [ "$(uname -m)" != "x86_64" ]; then
+            echo "Skipping: Not running on Intel MacOS (x86_64)"
+            exit 0
+          fi
 
       # Linux & MacOS (w/ Nix)
       - uses: cachix/install-nix-action@v27
@@ -40,18 +56,19 @@ jobs:
           "
 
       # Win (w/o Nix)
-      - name: Install Dependencies (Windows)
+      - uses: msys2/setup-msys2@v2
         if: matrix.use-flake == false
-        run: |
-          choco install -y nasm
-          choco install -y make
-          choco install -y mingw
+        with:
+          update: true
+          install: >-
+            make
+            nasm
+            mingw-w64-x86_64-gcc
 
       - name: Build & Test (Win)
         if: matrix.use-flake == false
         working-directory: ./clib
-        shell: bash
+        shell: msys2 {0}
         run: |
           make
           make test
-

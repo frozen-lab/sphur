@@ -18,6 +18,13 @@ ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
     ASM_OBJ=src/win_x64.o
 endif
 
+# MacOS (x64)
+ifeq ($(UNAME_S),Darwin)
+  ASM_SRC=../asm/linux_x64.asm
+  ASMFLAGS=-f macho64
+  ASM_OBJ=src/macos_x64.o
+endif
+
 OBJS=$(ASM_OBJ) src/sphur.o
 
 all: libsphur.a
