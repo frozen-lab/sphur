@@ -20,6 +20,10 @@ example: libsphur.a examples/example.c
 	$(CC) $(CFLAGS) examples/example.c libsphur.a -o example
 	./example
 
+test: libsphur.a tests/test_add_one.c
+	$(CC) $(CFLAGS) tests/test_add_one.c libsphur.a -o test_runner
+	./test_runner
+
 clean:
-	rm -f src/*.o libsphur.a example
+	rm -f **/*.o libsphur.a example test_runner
 
