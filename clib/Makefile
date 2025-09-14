@@ -20,7 +20,7 @@ endif
 
 # MacOS (x64)
 ifeq ($(UNAME_S),Darwin)
-  ASM_SRC=../asm/linux_x64.asm
+  ASM_SRC=../asm/macos_x64.asm
   ASMFLAGS=-f macho64
   ASM_OBJ=src/macos_x64.o
 endif
