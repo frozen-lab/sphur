@@ -1,13 +1,26 @@
 CC=gcc
 CFLAGS=-Wall -Wextra -O2 -Iinclude
 ASM=nasm
-ASMFLAGS=-f elf64
 
-OBJS=src/linux_x64.o src/sphur.o
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Linux)
+  ASM_SRC=../asm/linux_x64.asm
+  ASMFLAGS=-f elf64
+  ASM_OBJ=src/linux_x64.o
+endif
+
+ifeq ($(UNAME_S),MINGW64_NT) # or Windows detection
+  ASM_SRC=../asm/win_x64.asm
+  ASMFLAGS=-f win64
+  ASM_OBJ=src/win_x64.o
+endif
+
+OBJS=$(ASM_OBJ) src/sphur.o
 
 all: libsphur.a
 
-src/linux_x64.o: ../asm/linux_x64.asm
+$(ASM_OBJ): $(ASM_SRC)
 	$(ASM) $(ASMFLAGS) $< -o $@
 
 src/sphur.o: src/sphur.c
@@ -27,5 +40,4 @@ test: libsphur.a tests/test_add_one.c
 	$(MAKE) clean
 
 clean:
-	rm -f **/*.o libsphur.a example test_runner
-
+	rm -f src/*.o libsphur.a example test_runner
