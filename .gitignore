@@ -1,6 +1,10 @@
+# build files
 **/__pycache__/
 **/target/
 **/bin/
+**/build/
 **/node_modules/
+
+# bin files
 *.o
 *.a
