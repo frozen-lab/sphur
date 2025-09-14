@@ -10,47 +10,61 @@
         pkgs = import nixpkgs { inherit system; };
       in {
         devShells = {
-        asm = pkgs.mkShell {
-          name = "dev-asm";
-          buildInputs = with pkgs; [
-            # c/asm
-            nasm
-            gcc
-            gcc.libc
-            gdb
-            glibc.static
-            perf
-            pkg-config
+          dev = pkgs.mkShell {
+            name = "dev-mode";
+            buildInputs = with pkgs; [
+              # c/asm
+              nasm
+              gcc
+              gcc.libc
+              gdb
+              glibc.static
+              perf
+              pkg-config
+              gnumake
             
-            # rust
-            rustc
-            cargo
-            rustfmt
-            clippy
-            rust-analyzer
+              # rust
+              rustc
+              cargo
+              rustfmt
+              clippy
+              rust-analyzer
 
-            # python
-            python314
-            ruff
-            uv
-            pyright
+              # python
+              python314
+              ruff
+              uv
+              pyright
 
-            # js/ts
-            nodejs
-            typescript
-          ];
+              # js/ts
+              nodejs
+              typescript
+            ];
 
-          shellHook = ''
-            export RUST_BACKTRACE=1
+            shellHook = ''
+              export RUST_BACKTRACE=1
               
-            echo " : $(rustc --version)"
-            echo " : $(nasm --version)"
-            echo " : $(gcc --version)"
-            echo " : $(python3 --version)"
-            echo " : $(node --version)"
-          '';
+              echo " : $(rustc --version)"
+              echo " : $(nasm --version)"
+              echo " : $(gcc --version)"
+              echo " : $(python3 --version)"
+              echo " : $(node --version)"
+            '';
+          };
+          clib = pkgs.mkShell {
+            name = "clib-prod";
+            buildInputs = with pkgs; [
+              nasm
+              gcc
+              gnumake
+            ];
+  
+            shellHook = ''
+              echo " : $(nasm --version)"
+              echo " : $(gcc --version)"
+            '';
+          };
         };
-      };
-     }
-  );
+       }
+    );
 }
