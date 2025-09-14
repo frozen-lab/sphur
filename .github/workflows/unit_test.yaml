@@ -15,17 +15,43 @@ jobs:
         include:
           - os: ubuntu-latest
             arch: x86_64
+            use-flake: true
+
+          - os: windows-latest
+            arch: x86_64
+            use-flake: false
             
     runs-on: ${{ matrix.os }}
     
     steps:
       - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v27
 
-      - name: Build & Test clib
+      # Linux & MacOS (w/ Nix)
+      - uses: cachix/install-nix-action@v27
+        if: matrix.use-flake == true
+
+      - name: Build & Test (Linux/MacOS)
+        if: matrix.use-flake == true
         working-directory: ./clib
         run: |
           nix develop .#clib --command bash -c "
             make
             make test
           "
+
+      # Win (w/o Nix)
+      - name: Install Dependencies (Windows)
+        if: matrix.use-flake == false
+        run: |
+          choco install -y nasm
+          choco install -y make
+          choco install -y mingw
+
+      - name: Build & Test (Win)
+        if: matrix.use-flake == false
+        working-directory: ./clib
+        shell: bash
+        run: |
+          make
+          make test
+

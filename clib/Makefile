@@ -4,16 +4,18 @@ ASM=nasm
 
 UNAME_S := $(shell uname -s)
 
+# Linux (x64)
 ifeq ($(UNAME_S),Linux)
   ASM_SRC=../asm/linux_x64.asm
   ASMFLAGS=-f elf64
   ASM_OBJ=src/linux_x64.o
 endif
 
-ifeq ($(UNAME_S),MINGW64_NT) # or Windows detection
-  ASM_SRC=../asm/win_x64.asm
-  ASMFLAGS=-f win64
-  ASM_OBJ=src/win_x64.o
+# Windows (x64)
+ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
+    ASM_SRC=../asm/win_x64.asm
+    ASMFLAGS=-f win64
+    ASM_OBJ=src/win_x64.o
 endif
 
 OBJS=$(ASM_OBJ) src/sphur.o
