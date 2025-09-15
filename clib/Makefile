@@ -38,14 +38,26 @@ ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
 
 endif
 
-# MacOS (x64)
+# MacOS
 ifeq ($(UNAME_S),Darwin)
-	ASM_SRC=../asm/macos_x64.asm
-	ASMFLAGS=-f macho64
-	ASM_OBJ=src/macos_x64.o
+  # x86-64
+  ifeq ($(UNAME_M),x86_64)
+    ASM_SRC=../asm/macos_x64.asm
+    ASMFLAGS=-f macho64
+    ASM_OBJ=src/macos_x64.o
 
     $(ASM_OBJ): $(ASM_SRC)
-		$(ASM) $(ASMFLAGS) $< -o $@  
+        $(ASM) $(ASMFLAGS) $< -o $@
+  endif
+
+  # AArch64
+  ifeq ($(UNAME_M),arm64)
+    ASM_SRC=../asm/macos_a64.s
+    ASM_OBJ=src/macos_a64.o
+
+    $(ASM_OBJ): $(ASM_SRC)
+        $(CC) $(CFLAGS) -c $< -o $@
+  endif
 endif
 
 OBJS=$(ASM_OBJ) src/sphur.o
