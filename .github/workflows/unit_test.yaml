@@ -98,6 +98,7 @@ jobs:
         if: matrix.use-flake == false && matrix.arch == 'aarch64'
         with:
           update: true
+          msystem: clangarm64
           install: >-
             make
             mingw-w64-clang-aarch64-clang
@@ -107,5 +108,7 @@ jobs:
         working-directory: ./clib
         shell: msys2 {0}
         run: |
+          which clang
+          clang --version
           make ARCH=aarch64
           make ARCH=aarch64 test
