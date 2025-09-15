@@ -27,15 +27,27 @@ ifeq ($(UNAME_S),Linux)
   endif
 endif
 
-# Windows (x64)
+# Windows
 ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
-	ASM_SRC=../asm/win_x64.asm
-	ASMFLAGS=-f win64
-	ASM_OBJ=src/win_x64.o
+  # x86-64
+  ifeq ($(UNAME_M),x86_64)
+    ASM_SRC=../asm/win_x64.asm
+    ASMFLAGS=-f win64
+    ASM_OBJ=src/win_x64.o
 
     $(ASM_OBJ): $(ASM_SRC)
 		$(ASM) $(ASMFLAGS) $< -o $@
+  endif
 
+  # AArch64
+  ifeq ($(UNAME_M),arm64)
+    CC=clang
+    ASM_SRC=../asm/win_a64.s
+    ASM_OBJ=src/win_a64.o
+
+    $(ASM_OBJ): $(ASM_SRC)
+		$(CC) $(CFLAGS) -c $< -o $@
+  endif
 endif
 
 # MacOS

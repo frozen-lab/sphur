@@ -27,6 +27,10 @@ jobs:
           - os: windows-latest
             arch: x86_64
             use-flake: false
+            
+          - os: windows-11-arm
+            arch: aarch64
+            use-flake: false
 
           - os: macos-13
             arch: x86_64
@@ -71,9 +75,9 @@ jobs:
             "
           fi
 
-      # Win (w/o Nix)
+      # Win (w/o Nix) - x86
       - uses: msys2/setup-msys2@v2
-        if: matrix.use-flake == false
+        if: matrix.use-flake == false && matrix.arch == 'x86_64'
         with:
           update: true
           install: >-
@@ -81,8 +85,25 @@ jobs:
             nasm
             mingw-w64-x86_64-gcc
 
-      - name: Build & Test (Win)
-        if: matrix.use-flake == false
+      - name: Build & Test (Win x86_64)
+        if: matrix.use-flake == false && matrix.arch == 'x86_64'
+        working-directory: ./clib
+        shell: msys2 {0}
+        run: |
+          make
+          make test
+          
+      # Win (w/o Nix) - AArch64
+      - uses: msys2/setup-msys2@v2
+        if: matrix.use-flake == false && matrix.arch == 'aarch64'
+        with:
+          update: true
+          install: >-
+            make
+            mingw-w64-clang-aarch64-clang
+
+      - name: Build & Test (Win AArch64)
+        if: matrix.use-flake == false && matrix.arch == 'aarch64'
         working-directory: ./clib
         shell: msys2 {0}
         run: |
