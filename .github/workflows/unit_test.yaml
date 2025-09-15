@@ -51,8 +51,9 @@ jobs:
           fi
 
       # Linux & MacOS (w/ Nix)
-      - uses: cachix/install-nix-action@v27
+      - name: Install Nix
         if: matrix.use-flake == true
+        uses: nixbuild/nix-quick-install-action@v33
 
       - name: Build & Test (Linux/MacOS)
         if: matrix.use-flake == true

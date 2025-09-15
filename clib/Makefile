@@ -47,7 +47,7 @@ ifeq ($(UNAME_S),Darwin)
     ASM_OBJ=src/macos_x64.o
 
     $(ASM_OBJ): $(ASM_SRC)
-        $(ASM) $(ASMFLAGS) $< -o $@
+		$(ASM) $(ASMFLAGS) $< -o $@
   endif
 
   # AArch64
@@ -56,7 +56,7 @@ ifeq ($(UNAME_S),Darwin)
     ASM_OBJ=src/macos_a64.o
 
     $(ASM_OBJ): $(ASM_SRC)
-        $(CC) $(CFLAGS) -c $< -o $@
+		$(CC) $(CFLAGS) -c $< -o $@
   endif
 endif
 
