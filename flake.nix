@@ -22,6 +22,8 @@
               perf
               pkg-config
               gnumake
+              asm-lsp
+              clang-tools
             
               # rust
               rustc

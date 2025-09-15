@@ -1,5 +1,5 @@
+#include "../include/sphur.h"
 #include <assert.h>
-#include "sphur.h"
 
 int main(void) {
   assert(add_one(41) == 42);

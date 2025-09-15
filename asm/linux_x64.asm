@@ -1,3 +1,6 @@
+bits 64
+default rel
+
 global asm_add_one
 
 section .text

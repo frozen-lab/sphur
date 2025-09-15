@@ -1,10 +1,28 @@
-# build files
+# Ignore everything by default
+*
+
+# Allow subdirectories to be checked
+!*/
+
+# Allow following
+!**.asm
+!**.c
+!**.js
+!**.rs
+!**.py
+!**.nix
+!**.sh
+!**.md
+!**.gitignore
+!**.toml
+!**.yaml
+!**.lock
+!**.json
+!**.gyp
+
+# ignore build files
 **/__pycache__/
 **/target/
 **/bin/
 **/build/
 **/node_modules/
-
-# bin files
-*.o
-*.a
