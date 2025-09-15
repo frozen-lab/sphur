@@ -6,6 +6,7 @@
 
 # Allow following
 !**.asm
+!**.s
 !**.c
 !**.js
 !**.rs

@@ -53,8 +53,8 @@
               echo " : $(node --version)"
             '';
           };
-          clib = pkgs.mkShell {
-            name = "clib-prod";
+          clib_x64 = pkgs.mkShell {
+            name = "clib-prod-x64";
             buildInputs = with pkgs; [
               nasm
               gcc
@@ -63,6 +63,17 @@
   
             shellHook = ''
               echo " : $(nasm --version)"
+              echo " : $(gcc --version)"
+            '';
+          };
+          clib_a64 = pkgs.mkShell {
+            name = "clib-prod-a64";
+            buildInputs = with pkgs; [
+              gcc
+              gnumake
+            ];
+  
+            shellHook = ''
               echo " : $(gcc --version)"
             '';
           };
