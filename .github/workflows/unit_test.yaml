@@ -107,5 +107,5 @@ jobs:
         working-directory: ./clib
         shell: msys2 {0}
         run: |
-          make
-          make test
+          make ARCH=aarch64
+          make ARCH=aarch64 test

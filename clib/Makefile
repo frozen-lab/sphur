@@ -1,26 +1,36 @@
-CC=gcc
-CFLAGS=-Wall -Wextra -O2 -Iinclude
-ASM=nasm
+CC ?= gcc
+CFLAGS ?= -Wall -Wextra -O2 -Iinclude
+ASM ?= nasm
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
 
+# Allow to override arch value
+ARCH ?= $(UNAME_M)
+
+# Normalise possible names
+ifeq ($(ARCH),arm64)
+  ARCH := aarch64
+endif
+
+ASMFLAGS ?=
+
 # Linux
 ifeq ($(UNAME_S),Linux)
   # x86-64
-  ifeq ($(UNAME_M),x86_64)
-    ASM_SRC=../asm/linux_x64.asm
-    ASMFLAGS=-f elf64
-    ASM_OBJ=src/linux_x64.o
+  ifeq ($(ARCH),x86_64)
+    ASM_SRC := ../asm/linux_x64.asm
+    ASMFLAGS := -f elf64
+    ASM_OBJ := src/linux_x64.o
 
     $(ASM_OBJ): $(ASM_SRC)
 		$(ASM) $(ASMFLAGS) $< -o $@
   endif
 
   # AArch64
-  ifeq ($(UNAME_M),aarch64)
-    ASM_SRC=../asm/linux_a64.s
-    ASM_OBJ=src/linux_a64.o
+  ifeq ($(ARCH),aarch64)
+    ASM_SRC := ../asm/linux_a64.s
+    ASM_OBJ := src/linux_a64.o
 
     $(ASM_OBJ): $(ASM_SRC)
 		$(CC) $(CFLAGS) -c $< -o $@
@@ -30,20 +40,20 @@ endif
 # Windows
 ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
   # x86-64
-  ifeq ($(UNAME_M),x86_64)
-    ASM_SRC=../asm/win_x64.asm
-    ASMFLAGS=-f win64
-    ASM_OBJ=src/win_x64.o
+  ifeq ($(ARCH),x86_64)
+    ASM_SRC := ../asm/win_x64.asm
+    ASMFLAGS := -f win64
+    ASM_OBJ := src/win_x64.o
 
     $(ASM_OBJ): $(ASM_SRC)
 		$(ASM) $(ASMFLAGS) $< -o $@
   endif
 
   # AArch64
-  ifeq ($(UNAME_M),arm64)
-    CC=clang
-    ASM_SRC=../asm/win_a64.s
-    ASM_OBJ=src/win_a64.o
+  ifeq ($(ARCH),aarch64)
+    CC := clang
+    ASM_SRC := ../asm/win_a64.s
+    ASM_OBJ := src/win_a64.o
 
     $(ASM_OBJ): $(ASM_SRC)
 		$(CC) $(CFLAGS) -c $< -o $@
@@ -53,19 +63,19 @@ endif
 # MacOS
 ifeq ($(UNAME_S),Darwin)
   # x86-64
-  ifeq ($(UNAME_M),x86_64)
-    ASM_SRC=../asm/macos_x64.asm
-    ASMFLAGS=-f macho64
-    ASM_OBJ=src/macos_x64.o
+  ifeq ($(ARCH),x86_64)
+    ASM_SRC := ../asm/macos_x64.asm
+    ASMFLAGS := -f macho64
+    ASM_OBJ := src/macos_x64.o
 
     $(ASM_OBJ): $(ASM_SRC)
 		$(ASM) $(ASMFLAGS) $< -o $@
   endif
 
   # AArch64
-  ifeq ($(UNAME_M),arm64)
-    ASM_SRC=../asm/macos_a64.s
-    ASM_OBJ=src/macos_a64.o
+  ifeq ($(ARCH),aarch64)
+    ASM_SRC := ../asm/macos_a64.s
+    ASM_OBJ := src/macos_a64.o
 
     $(ASM_OBJ): $(ASM_SRC)
 		$(CC) $(CFLAGS) -c $< -o $@
