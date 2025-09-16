@@ -4,7 +4,16 @@
 // Returns: 0 = ok, 1 = error
 int function_gen_seeds(uint64_t seed, uint64_t *out, uint64_t n);
 
-int sphur_init(sphur_state_t *state, uint64_t seed) {
+int sphur_init(sphur_state_t *state) {
+  // error (invalid state pointer)
+  if (!state)
+    return 1;
+
+  int ret = function_gen_seeds((uint64_t)0, state->seeds, 8);
+  return ret;
+}
+
+int sphur_init_seeded(sphur_state_t *state, uint64_t seed) {
   // error (invalid state pointer)
   if (!state)
     return 1;
