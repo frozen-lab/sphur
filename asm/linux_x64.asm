@@ -1,7 +1,7 @@
 bits 64
 default rel
 
-global asm_gen_rand
+global function_split_mix_64
 
 section .rodata
         GOLDEN_RATIO: dq 0x9E3779B97F4A7C15
@@ -9,9 +9,6 @@ section .rodata
         MULT_TWO: dq 0x94D049BB133111EB
 
 section .text
-asm_gen_rand:
-        mov rax, 0x01
-        ret
 
 ; Generate N independent 64-bit "sub-seeds" based on a input seed
 ;
