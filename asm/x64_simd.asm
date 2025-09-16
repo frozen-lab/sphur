@@ -79,6 +79,7 @@ function_split_mix_64:
         ;; exit(0)
         xor rax, rax
 .ret:
+        ;; restoring clobbered registers
         pop r9
         pop r8
         pop rcx
