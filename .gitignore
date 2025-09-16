@@ -20,6 +20,8 @@
 !**.lock
 !**.json
 !**.gyp
+!make_x64
+!make_a64
 
 # ignore build files
 **/__pycache__/
