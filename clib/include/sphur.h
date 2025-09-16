@@ -1,6 +1,6 @@
 #ifndef SPHUR_H
 #define SPHUR_H
 
-int add_one(int x);
+int gen_rand(void);
 
 #endif

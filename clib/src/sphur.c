@@ -1,5 +1,5 @@
 #include "../include/sphur.h"
 
-int asm_add_one(int x);
+int asm_gen_rand(void);
 
-int add_one(int x) { return asm_add_one(x); }
+int gen_rand(void) { return asm_gen_rand(); }

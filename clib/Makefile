@@ -97,8 +97,8 @@ example: libsphur.a examples/example.c
 	./example
 	$(MAKE) clean
 
-test: libsphur.a tests/test_add_one.c
-	$(CC) $(CFLAGS) tests/test_add_one.c libsphur.a -o test_runner
+test: libsphur.a tests/test.c
+	$(CC) $(CFLAGS) tests/test.c libsphur.a -o test_runner
 	./test_runner
 	$(MAKE) clean
 

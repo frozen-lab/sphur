@@ -1,7 +1,8 @@
 #include "../include/sphur.h"
-#include <stdio.h>
+#include <assert.h>
 
 int main(void) {
-  printf("%d\n", gen_rand());
+  assert(gen_rand() == 1);
+
   return 0;
 }

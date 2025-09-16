@@ -10,7 +10,7 @@
         pkgs = import nixpkgs { inherit system; };
       in {
         devShells = {
-          dev = pkgs.mkShell {
+          default = pkgs.mkShell {
             name = "dev-mode";
             buildInputs = with pkgs; [
               # c/asm
