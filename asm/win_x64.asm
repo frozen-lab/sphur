@@ -28,6 +28,9 @@ function_gen_seeds:
         mov r9, rdx
 
         ;; read the CPU time stamp counter
+        ;;
+        ;; NOTE: it outputs 64-bit split across
+        ;; `rax` & `rdx` (in the lower 32 bits each)
         rdtsc
         
         xor rax, rdx

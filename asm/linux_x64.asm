@@ -6,9 +6,6 @@ global function_gen_seeds
 ; simd uitls (`./x64_simd.asm`)
 extern function_split_mix_64
 
-section .bss
-        time_val resq 0x02        ; 16-bytes for `tval` struct
-
 section .text
 
 ; Generate N independent 64-bit "sub-seeds" based on a input seed
@@ -23,46 +20,26 @@ section .text
 ;   rsi - (preserved) the input pointer is preserved, w/ the buffer
 ;         containing N 64-bit sub-seeds
 function_gen_seeds:
+        push r9                       ; used as temp 
+        
         test rdi, rdi
         jnz .split_mix
-.gen_seed:
-        lea rdi, [time_val]
-        call function_clock_get_time
 
-        test rax, rax
-        jnz .err
+        mov r9, rdx
 
-        ;; generate µs since epoch
-        mov rdi, qword [time_val]      ; seed = tv_sec
-        imul rdi, rdi, 1000000         ; seed = seed * 1_000_000
-        add rdi, qword [time_val + 8]  ; seed += tv_usec
+        ;; read the CPU time stamp counter
+        ;; 
+        ;; NOTE: it outputs 64-bit split across
+        ;; `rax` & `rdx` (in the lower 32 bits each)
+        rdtsc
+        
+        xor rax, rdx         ; combine 32 + 32 to get 64 bit value
+        mov rdi, rax         ; seed = rax ^ rdx
+
+        mov rdx, r9
 .split_mix:
         call function_split_mix_64
+.ret:
+        pop r9
         ret
-.err:
-        mov rax, 0x01
-        ret
-
-; obtain current epoch time using `clock_gettime` syscall
-; 
-; Args:
-;   rdi - Pointer to out buf (16 bytes) to store `tval` struct
-;
-; Returns:
-;   rax - `0` on success, `-1` otherwise
-;
-; Clobbers:
-;   rax
-function_clock_get_time:
-        push rsi
-        
-        ;; `clock_gettime` syscall
-        mov rax, 0xE4
-        mov rsi, rdi
-        xor rdi, rdi
-        syscall
-
-        pop rsi
-
-        ret
-        
+       
