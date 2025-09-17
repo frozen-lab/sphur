@@ -5,8 +5,8 @@ ASM     ?= nasm
 UNAME_S := $(shell uname -s)
 
 # common SIMD file
-ASM_SIMD_SRC := ../asm/x64_simd.asm
-ASM_SIMD_OBJ := ./src/x64_simd.o
+ASM_SIMD_SRC := ../asm/simd_x64.asm
+ASM_SIMD_OBJ := ./src/simd_x64.o
 
 # Linux (x64)
 ifeq ($(UNAME_S),Linux)

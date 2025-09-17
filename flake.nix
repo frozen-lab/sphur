@@ -46,11 +46,11 @@
             shellHook = ''
               export RUST_BACKTRACE=1
               
-              echo " : $(rustc --version)"
               echo " : $(nasm --version)"
-              echo " : $(gcc --version)"
+              echo " : $(rustc --version)"
               echo " : $(python3 --version)"
               echo " : $(node --version)"
+              echo " : $(gcc --version)"
             '';
           };
           clib_x64 = pkgs.mkShell {
