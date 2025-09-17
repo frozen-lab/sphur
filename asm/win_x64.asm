@@ -5,7 +5,6 @@ global function_gen_seeds
 
 ; simd uitls (`./x64_simd.asm`)
 extern function_split_mix_64
-extern QueryPerformanceCounter
 
 section .text
 
@@ -21,27 +20,29 @@ section .text
 ;   rdx - (preserved) the input pointer is preserved, w/ the buffer
 ;         containing N 64-bit sub-seeds
 function_gen_seeds:
+        push r9
+        
         test rcx, rcx
         jnz .split_mix
 
-        sub rsp, 0x28                   ; shadow space
-        lea rcx, [rsp + 0x20]           ; pointer to 64-bit buffer
+        mov r9, rdx
 
-        ;; this never fails ╰(*°▽°*)╯
-        ;; let's believe in microsoft, for more info ->
-        ;; `https://learn.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter`
-        call QueryPerformanceCounter
+        ;; read the CPU time stamp counter
+        rdtsc
         
-        mov rcx, [rsp+0x20]             ; seed = performance counter
-        add rsp, 0x28                   ; clear shadow space
+        xor rax, rdx
+        mov rcx, rax         ; seed = rax ^ rdx
+
+        mov rdx, r9
 .split_mix:
         ;; prepare args for split_mix (System V style)
         mov rdi, rcx
         mov rsi, rdx
         mov rdx, r8
 
-        sub rsp, 0x20                   ; creating shadow space
+        sub rsp, 0x28                   ; shadow space
         call function_split_mix_64
-        add rsp, 0x20                   ; clear shadow space
-        
+        add rsp, 0x28                   ; clear shadow space
+
+        pop r9
         ret
