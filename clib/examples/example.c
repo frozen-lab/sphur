@@ -9,6 +9,10 @@ int main(void) {
   // w/ seed
   if (sphur_init_seeded(&state, 1234) == 0) {
     printf("Generated sub-seeds (w/ Seed): %zu\n", SEED_COUNT);
+
+    for (int i = 0; i < 8; i++) {
+      printf("seed[%d] = %llu\n", i, (unsigned long long)state.seeds[i]);
+    }
   } else {
     printf("Error initializing state!\n");
     return 1;
@@ -17,6 +21,10 @@ int main(void) {
   // w/o seed
   if (sphur_init(&state) == 0) {
     printf("Generated sub-seeds (w/o Seed): %zu\n", SEED_COUNT);
+
+    for (int i = 0; i < 8; i++) {
+      printf("seed[%d] = %llu\n", i, (unsigned long long)state.seeds[i]);
+    }
   } else {
     printf("Error initializing state!\n");
     return 1;
