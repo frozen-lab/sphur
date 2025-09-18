@@ -20,9 +20,9 @@ jobs:
             arch: x86_64
             use-flake: true
             
-          # - os: ubuntu-24.04-arm
-          #   arch: aarch64
-          #   use-flake: true
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+            use-flake: true
 
           - os: windows-latest
             arch: x86_64
@@ -103,13 +103,15 @@ jobs:
         run: |
           if [ "${{ matrix.arch }}" = "aarch64" ]; then
             nix develop .#clib_a64 --command bash -c "
-              make
-              make test
+              make -f make_a64
+              make -f make_a64 test
+              make -f make_a64 example
             "
           else
             nix develop .#clib_x64 --command bash -c "
               make -f make_x64
               make -f make_x64 test
+              make -f make_x64 example
             "
           fi
 
@@ -141,6 +143,7 @@ jobs:
         run: |
           make -f make_x64
           make -f make_x64 test
+          make -f make_x64 example
           
       #
       # Win (AArch64) (w/o nix)
@@ -161,5 +164,6 @@ jobs:
         run: |
           which clang
           clang --version
-          make ARCH=aarch64
-          make ARCH=aarch64 test
+          make -f make_a64
+          make -f make_a64 test
+          make -f make_a64 example

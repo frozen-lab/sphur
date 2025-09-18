@@ -9,7 +9,25 @@ int sphur_init(sphur_state_t *state) {
   if (!state)
     return 1;
 
+// NOTE: We generate platform seed by default for arm
+#if defined(__aarch64__) || defined(_M_ARM64)
+
+#include <stdint.h>
+#include <time.h>
+
+  uint64_t generate_platform_seed(void) {
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+
+    return ((uint64_t)ts.tv_sec << 32) ^ (uint64_t)ts.tv_nsec;
+  }
+
+  uint64_t seed = generate_platform_seed();
+  int ret = function_gen_seeds(seed, state->seeds, 8);
+#else
   int ret = function_gen_seeds((uint64_t)0, state->seeds, 8);
+#endif
+
   return ret;
 }
 

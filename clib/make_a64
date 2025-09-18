@@ -1,0 +1,63 @@
+CC      ?= gcc
+CFLAGS  ?= -Wall -Wextra -O2 -Iinclude
+
+UNAME_S := $(shell uname -s)
+
+# common SIMD file
+ASM_SIMD_SRC := ../asm/simd_a64.s
+ASM_SIMD_OBJ := ./src/simd_a64.o
+
+# Linux (x64)
+ifeq ($(UNAME_S),Linux)
+    ASM_SRC := ../asm/linux_a64.s
+    ASM_OBJ := ./src/linux_a64.o
+endif
+
+# Windows (x64)
+ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
+    CC := clang
+    ASM_SRC := ../asm/win_a64.s
+    ASM_OBJ := ./src/win_a64.o
+endif
+
+# MacOS (x64)
+ifeq ($(UNAME_S),Darwin)
+    ASM_SRC := ../asm/macos_a64.s
+    ASM_OBJ := ./src/macos_a64.o
+endif
+
+# All objs
+OBJS = $(ASM_OBJ) $(ASM_SIMD_OBJ) src/sphur.o
+
+# Assemble w/ os specific args
+$(ASM_OBJ): $(ASM_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Assemble SIMD utils
+$(ASM_SIMD_OBJ): $(ASM_SIMD_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile clib
+src/sphur.o: src/sphur.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# defualt target
+all: libsphur.a
+
+# create static clib (builds an archive)
+libsphur.a: $(OBJS)
+	ar rcs $@ $(OBJS)
+
+example: libsphur.a examples/example.c
+	$(CC) $(CFLAGS) examples/example.c libsphur.a -o example
+	./example
+	$(MAKE) clean
+
+test: libsphur.a tests/test.c
+	$(CC) $(CFLAGS) tests/test.c libsphur.a -o test_runner
+	./test_runner
+	$(MAKE) clean
+
+clean:
+	rm -f src/*.o libsphur.a example test_runner
+
