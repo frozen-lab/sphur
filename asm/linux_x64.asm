@@ -3,7 +3,7 @@ default rel
 
 global function_gen_seeds
 
-; simd uitls (`./x64_simd.asm`)
+; simd uitls (`./simd_x64.asm`)
 extern function_split_mix_64
 
 section .text
