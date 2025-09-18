@@ -54,12 +54,10 @@ libsphur.a: $(OBJS)
 example: libsphur.a examples/example.c
 	$(CC) $(CFLAGS) examples/example.c libsphur.a -o example
 	./example
-	$(MAKE) clean
 
 test: libsphur.a tests/test.c
 	$(CC) $(CFLAGS) tests/test.c libsphur.a -o test_runner
 	./test_runner
-	$(MAKE) clean
 
 clean:
 	rm -f src/*.o libsphur.a example test_runner
