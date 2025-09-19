@@ -14,7 +14,6 @@
             name = "dev-mode";
             buildInputs = with pkgs; [
               # c/asm
-              nasm
               gcc
               gcc.libc
               gdb
@@ -22,7 +21,6 @@
               perf
               pkg-config
               gnumake
-              asm-lsp
               clang-tools
             
               # rust
@@ -46,28 +44,14 @@
             shellHook = ''
               export RUST_BACKTRACE=1
               
-              echo " : $(nasm --version)"
               echo " : $(rustc --version)"
               echo " : $(python3 --version)"
               echo " : $(node --version)"
               echo " : $(gcc --version)"
             '';
           };
-          clib_x64 = pkgs.mkShell {
-            name = "clib-prod-x64";
-            buildInputs = with pkgs; [
-              nasm
-              gcc
-              gnumake
-            ];
-  
-            shellHook = ''
-              echo " : $(nasm --version)"
-              echo " : $(gcc --version)"
-            '';
-          };
-          clib_a64 = pkgs.mkShell {
-            name = "clib-prod-a64";
+          clib_prod = pkgs.mkShell {
+            name = "clib-prod";
             buildInputs = with pkgs; [
               gcc
               gnumake
