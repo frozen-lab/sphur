@@ -5,6 +5,18 @@
 #include <stdint.h>
 #include <time.h>
 
+// -----------------------------------------------------------------------------
+// Architecture guard! We only support 64-bit architectures (x86_64 and
+// AArch64).
+// -----------------------------------------------------------------------------
+#if !defined(__x86_64__) && !defined(_M_X64) && !defined(__aarch64__) &&       \
+    !defined(_M_ARM64)
+
+#error "sphur: 64-bit architecture required (x86_64 or AArch64). \
+32-bit targets (i386/armv7) are not supported."
+
+#endif
+
 /*
 High performance pseudo-random number generator
 
@@ -26,10 +38,17 @@ typedef struct {
 
 // Seed generator to generate default seed
 static inline uint64_t _sphur_gen_platform_seed(void) {
+  // for x64 we use RDTSC
+#if defined(__x86_64__) || defined(_M_X64)
+  unsigned int hi, lo;
+  __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+  return ((uint64_t)hi << 32) | lo;
+#else
   struct timespec ts;
   timespec_get(&ts, TIME_UTC);
 
   return ((uint64_t)ts.tv_sec << 32) ^ (uint64_t)ts.tv_nsec;
+#endif
 }
 
 // Gereates N sub-seeds to be used in PRNG mixer
