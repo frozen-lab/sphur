@@ -34,9 +34,12 @@ void test_sanity_check(void) {
 }
 
 int main(void) {
+  printf("----INIT TESTS----\n\n");
+
   test_init();
   test_init_seeded();
   test_sanity_check();
 
+  printf("▶ All tests passed!\n\n");
   return 0;
 }

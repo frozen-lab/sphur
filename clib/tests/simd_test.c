@@ -128,7 +128,7 @@ static void test_sse2_multiple_runs(void) {
 // -----------------------------------------------------------------------------
 
 int main(void) {
-  printf("Running sphur SIMD tests...\n");
+  printf("----SIMD TESTS----\n\n");
 
   test_avx2_null_args();
   test_avx2_basic_run();
@@ -138,6 +138,6 @@ int main(void) {
   test_sse2_basic_run();
   test_sse2_multiple_runs();
 
-  printf("All tests passed!\n");
+  printf("▶ All tests passed!\n\n");
   return 0;
 }
