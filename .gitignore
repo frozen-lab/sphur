@@ -5,9 +5,8 @@
 !*/
 
 # Allow following
-!**.asm
-!**.s
 !**.c
+!**.h
 !**.js
 !**.rs
 !**.py
@@ -20,8 +19,7 @@
 !**.lock
 !**.json
 !**.gyp
-!make_x64
-!make_a64
+!Makefile
 
 # ignore build files
 **/__pycache__/
