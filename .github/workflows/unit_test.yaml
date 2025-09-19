@@ -124,7 +124,6 @@ jobs:
           update: true
           install: >-
             make
-            nasm
             mingw-w64-x86_64-gcc
 
       - name: Build & Test (Win x86_64)

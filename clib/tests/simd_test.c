@@ -22,6 +22,8 @@ static void dump_u64_buf(const char *label, const uint64_t *buf, size_t n) {
 // AVX2
 // -----------------------------------------------------------------------------
 
+#if defined(__x86_64__) || defined(_M_X64)
+
 static void test_avx2_null_args(void) {
   uint64_t seeds[8] = {0};
   uint64_t out[4] = {0};
@@ -123,6 +125,8 @@ static void test_sse2_multiple_runs(void) {
   dump_u64_buf("SSE2 out2", out2, 2);
 }
 
+#endif
+
 // -----------------------------------------------------------------------------
 // NEON
 // -----------------------------------------------------------------------------
@@ -189,7 +193,7 @@ static void test_neon_multiple_runs(void) {
 int main(void) {
   printf("----SIMD TESTS----\n\n");
 
-#if defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__aarch64__) || defined(_M_ARM64) || defined(__arm64__)
   test_neon_null_args();
   test_neon_basic_run();
   test_neon_multiple_runs();
