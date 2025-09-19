@@ -1,15 +1,21 @@
 #ifndef SPHUR_H
 #define SPHUR_H
 
-#include <cpuid.h>
-#include <emmintrin.h>
-#include <immintrin.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <time.h>
 
-#ifdef __aarch64__
+// aarch specific imports
+#if defined(__aarch64__) || defined(_M_ARM64)
+
 #include <arm_neon.h>
+
+#else
+
+#include <cpuid.h>
+#include <emmintrin.h>
+#include <immintrin.h>
+
 #endif
 
 // -----------------------------------------------------------------------------
@@ -28,7 +34,6 @@
 typedef enum {
   SPHUR_SIMD_AVX2 = 0,
   SPHUR_SIMD_SSE2 = 1,
-  SPHUR_SIMD_NEON = 2,
 } _sphur_simd_ext_t;
 
 // High performance pseudo-random number generator
@@ -56,6 +61,8 @@ typedef struct {
 // Utils
 // -----------------------------------------------------------------------------
 
+#if defined(__x86_64__) || defined(_M_X64)
+
 static inline void _sphur_detect_simd_ext(sphur_t *state) {
   unsigned eax, ebx, ecx, edx;
 
@@ -72,6 +79,8 @@ static inline void _sphur_detect_simd_ext(sphur_t *state) {
   // default to baseline SSE2
   state->_simd_ext = SPHUR_SIMD_SSE2;
 }
+
+#endif
 
 // Seed generator to generate default seed
 static inline uint64_t _sphur_gen_platform_seed(void) {
@@ -156,6 +165,67 @@ static inline int _sphur_rands_peek(const sphur_t *state, uint64_t *out) {
 // -----------------------------------------------------------------------------
 // SIMD Intrinsics
 // -----------------------------------------------------------------------------
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+
+// Generate 4 prng's w/ aarch64 neon using 8 sub-seeds
+//
+// NOTE: The sub-seeds are updated after PRNG generation
+static inline int _sphur_simd_neon_xorshiro_128_plus(uint64_t *seeds,
+                                                     uint64_t *out) {
+  // sanity check
+  if (!seeds || !out)
+    return -1;
+
+  // load s0 lane (seeds[0..1])
+  uint64x2_t s0 = vld1q_u64(seeds);
+
+  // load s1 lane (seeds[2..3])
+  uint64x2_t s1 = vld1q_u64(seeds + 2);
+
+  // res = s0 + s1
+  uint64x2_t res = vaddq_u64(s0, s1);
+
+  // store 2 outputs
+  vst1q_u64(out, res);
+
+  // s1 ^= s0
+  s1 = veorq_u64(s1, s0);
+
+  // rol(s0,55)
+  uint64x2_t rol55 = vsliq_n_u64(vshrq_n_u64(s0, 9), s0, 55);
+
+  // new_s0 = rol(s0,55) ^ s1 ^ (s1 << 14)
+  uint64x2_t s1_sh14 = vshlq_n_u64(s1, 14);
+  uint64x2_t new_s0 = veorq_u64(veorq_u64(rol55, s1), s1_sh14);
+
+  // new_s1 = rol(s1,36)
+  uint64x2_t rol36 = vsliq_n_u64(vshrq_n_u64(s1, 28), s1, 36);
+
+  // store updated state
+  vst1q_u64(seeds, new_s0);
+  vst1q_u64(seeds + 2, rol36);
+
+  // repeat once more for seeds[4..7] to produce next 2 outputs
+  s0 = vld1q_u64(seeds + 4);
+  s1 = vld1q_u64(seeds + 6);
+
+  res = vaddq_u64(s0, s1);
+  vst1q_u64(out + 2, res);
+
+  s1 = veorq_u64(s1, s0);
+  rol55 = vsliq_n_u64(vshrq_n_u64(s0, 9), s0, 55);
+  s1_sh14 = vshlq_n_u64(s1, 14);
+  new_s0 = veorq_u64(veorq_u64(rol55, s1), s1_sh14);
+  rol36 = vsliq_n_u64(vshrq_n_u64(s1, 28), s1, 36);
+
+  vst1q_u64(seeds + 4, new_s0);
+  vst1q_u64(seeds + 6, rol36);
+
+  return 0;
+}
+
+#else
 
 // Generate 4 prng's w/ x86_64 AVX2 using 8 sub-seeds
 //
@@ -267,79 +337,25 @@ _sphur_simd_sse2_xorshiro_128_plus(uint64_t *seeds, uint64_t *out) {
   return 0;
 }
 
-#if defined(__aarch64__) || defined(_M_ARM64)
-// Generate 4 prng's w/ aarch64 neon using 8 sub-seeds
-//
-// NOTE: The sub-seeds are updated after PRNG generation
-static inline int _sphur_simd_neon_xorshiro_128_plus(uint64_t *seeds,
-                                                     uint64_t *out) {
-  // sanity check
-  if (!seeds || !out)
-    return -1;
-
-  // load s0 lane (seeds[0..1])
-  uint64x2_t s0 = vld1q_u64(seeds);
-
-  // load s1 lane (seeds[2..3])
-  uint64x2_t s1 = vld1q_u64(seeds + 2);
-
-  // res = s0 + s1
-  uint64x2_t res = vaddq_u64(s0, s1);
-
-  // store 2 outputs
-  vst1q_u64(out, res);
-
-  // s1 ^= s0
-  s1 = veorq_u64(s1, s0);
-
-  // rol(s0,55)
-  uint64x2_t rol55 = vsliq_n_u64(vshrq_n_u64(s0, 9), s0, 55);
-
-  // new_s0 = rol(s0,55) ^ s1 ^ (s1 << 14)
-  uint64x2_t s1_sh14 = vshlq_n_u64(s1, 14);
-  uint64x2_t new_s0 = veorq_u64(veorq_u64(rol55, s1), s1_sh14);
-
-  // new_s1 = rol(s1,36)
-  uint64x2_t rol36 = vsliq_n_u64(vshrq_n_u64(s1, 28), s1, 36);
-
-  // store updated state
-  vst1q_u64(seeds, new_s0);
-  vst1q_u64(seeds + 2, rol36);
-
-  // repeat once more for seeds[4..7] to produce next 2 outputs
-  s0 = vld1q_u64(seeds + 4);
-  s1 = vld1q_u64(seeds + 6);
-
-  res = vaddq_u64(s0, s1);
-  vst1q_u64(out + 2, res);
-
-  s1 = veorq_u64(s1, s0);
-  rol55 = vsliq_n_u64(vshrq_n_u64(s0, 9), s0, 55);
-  s1_sh14 = vshlq_n_u64(s1, 14);
-  new_s0 = veorq_u64(veorq_u64(rol55, s1), s1_sh14);
-  rol36 = vsliq_n_u64(vshrq_n_u64(s1, 28), s1, 36);
-
-  vst1q_u64(seeds + 4, new_s0);
-  vst1q_u64(seeds + 6, rol36);
-
-  return 0;
-}
 #endif
 
 static inline int _sphur_simd_xorshiro_128_plus(sphur_t *state) {
-// for neon check
 #if defined(__aarch64__) || defined(_M_ARM64)
+  // NOTE: We assume all arm cpus support base neon, as in all x86_64
+  // support sse2 impl!
   return _sphur_simd_neon_xorshiro_128_plus(state->_seeds, state->_rands);
-#endif
-
+#else
   switch (state->_simd_ext) {
   case SPHUR_SIMD_AVX2:
     return _sphur_simd_avx2_xorshiro_128_plus(state->_seeds, state->_rands);
   case SPHUR_SIMD_SSE2:
     return _sphur_simd_sse2_xorshiro_128_plus(state->_seeds, state->_rands);
-  default:
-    return -1;
   }
+
+  // NOTE: This is a very rare error state, cause, all x86_64 bits CPU's
+  // support sse2 as a strict requirment
+  return -1;
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -353,8 +369,12 @@ static inline int sphur_init(sphur_t *state) {
 
   uint64_t seed = _sphur_gen_platform_seed();
 
-  _sphur_splitmix64_generate(seed, state->_seeds, 8);
+  // detch simd extension ox x64
+#if defined(__x86_64__) || defined(_M_X64)
   _sphur_detect_simd_ext(state);
+#endif
+
+  _sphur_splitmix64_generate(seed, state->_seeds, 8);
   state->_rbuf = NULL;
   state->_rpos = 0;
   state->_rcnt = 0;
@@ -367,8 +387,12 @@ static inline int sphur_init_seeded(sphur_t *state, uint64_t seed) {
   if (!state)
     return -1;
 
-  _sphur_splitmix64_generate(seed, state->_seeds, 8);
+  // detch simd extension ox x64
+#if defined(__x86_64__) || defined(_M_X64)
   _sphur_detect_simd_ext(state);
+#endif
+
+  _sphur_splitmix64_generate(seed, state->_seeds, 8);
   state->_rbuf = NULL;
   state->_rpos = 0;
   state->_rcnt = 0;
