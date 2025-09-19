@@ -1,6 +1,7 @@
 #ifndef SPHUR_H
 #define SPHUR_H
 
+#include <emmintrin.h>
 #include <immintrin.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -179,6 +180,65 @@ _sphur_simd_avx2_xorshiro_128_plus(uint64_t *seeds, uint64_t *out) {
 
   return 0;
 }
+
+// Generate 2 prng's w/ x86_64 SSE2 using 4 sub-seeds
+//
+// NOTE: The sub-seeds are updated after PRNG generation
+//
+// NOTE: Only the initial 4 of 8 sub-seeds are being used here
+// cause of register size
+__attribute__((target("sse2"))) static inline int
+_sphur_simd_sse2_xorshiro_128_plus(uint64_t *seeds, uint64_t *out) {
+  // sanity check
+  if (!seeds || !out)
+    return -1;
+
+  // load s0 lane (seeds[0..1])
+  __m128i s0 = _mm_loadu_si128((const __m128i *)(const void *)seeds);
+
+  // load s1 lane (seeds[2..3])
+  __m128i s1 = _mm_loadu_si128((const __m128i *)(const void *)(seeds + 2));
+
+  // res = s0 + s1
+  __m128i res = _mm_add_epi64(s0, s1);
+
+  // write 2 generated prng's to [out] buf
+  _mm_storeu_si128((__m128i *)(void *)out, res);
+
+  //
+  // Update old state (sub-seeds)
+  //
+
+  // s1 ^= s0
+  s1 = _mm_xor_si128(s1, s0);
+
+  // rol(s0, 55) = (s0 << 55) | (s0 >> 9)
+  __m128i left55 = _mm_slli_epi64(s0, 55);
+  __m128i right9 = _mm_srli_epi64(s0, 9);
+  __m128i rol55 = _mm_or_si128(left55, right9);
+
+  // s1 << 14
+  __m128i s1_sh14 = _mm_slli_epi64(s1, 14);
+
+  // new s0 = rol(s0, 55) ^ s1 ^ (s1 << 14)
+  __m128i new_s0 = _mm_xor_si128(rol55, s1);
+  new_s0 = _mm_xor_si128(new_s0, s1_sh14);
+
+  // new s1 = rol(s1, 36) = (s1 << 36) | (s1 >> 28)
+  __m128i left36 = _mm_slli_epi64(s1, 36);
+  __m128i right28 = _mm_srli_epi64(s1, 28);
+  __m128i new_s1 = _mm_or_si128(left36, right28);
+
+  // storing the new state into [seeds] buf
+  _mm_storeu_si128((__m128i *)(seeds), new_s0);
+  _mm_storeu_si128((__m128i *)(seeds + 2), new_s1);
+
+  return 0;
+}
+
+// -----------------------------------------------------------------------------
+// Public Interface
+// -----------------------------------------------------------------------------
 
 // Initialize sphur_t state
 static inline int sphur_init(sphur_t *state) {
