@@ -10,6 +10,7 @@ void test_init(void) {
   assert(ctx._rbuf == NULL);
   assert(ctx._rcnt == 0);
   assert(ctx._rpos == 0);
+  assert(ctx._simd_ext == 0 || ctx._simd_ext == 1);
 
   printf("test_init_default: PASS\n");
 }
@@ -22,6 +23,7 @@ void test_init_seeded(void) {
   assert(ctx._rbuf == NULL);
   assert(ctx._rcnt == 0);
   assert(ctx._rpos == 0);
+  assert(ctx._simd_ext == 0 || ctx._simd_ext == 1);
 
   printf("test_init_seeded: PASS\n");
 }

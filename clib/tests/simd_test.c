@@ -124,12 +124,76 @@ static void test_sse2_multiple_runs(void) {
 }
 
 // -----------------------------------------------------------------------------
+// NEON
+// -----------------------------------------------------------------------------
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+
+static void test_neon_null_args(void) {
+  uint64_t seeds[8] = {0};
+  uint64_t out[4] = {0};
+
+  assert(_sphur_simd_neon_xorshiro_128_plus(NULL, out) == -1);
+  assert(_sphur_simd_neon_xorshiro_128_plus(seeds, NULL) == -1);
+}
+
+static void test_neon_basic_run(void) {
+  uint64_t seeds[8] = {21, 22, 23, 24, 25, 26, 27, 28};
+  uint64_t out[4] = {0};
+
+  int ret = _sphur_simd_neon_xorshiro_128_plus(seeds, out);
+  assert(ret == 0);
+
+  // ensure output not all zero
+  int allzero = 1;
+
+  for (int i = 0; i < 4; i++) {
+    if (out[i] != 0) {
+      allzero = 0;
+
+      break;
+    }
+  }
+
+  assert(!allzero);
+
+  // ensure seeds updated (not same as initial)
+  uint64_t old[8] = {21, 22, 23, 24, 25, 26, 27, 28};
+  assert(memcmp(seeds, old, sizeof(old)) != 0);
+
+  dump_u64_buf("NEON out", out, 4);
+  dump_u64_buf("NEON seeds", seeds, 8);
+}
+
+static void test_neon_multiple_runs(void) {
+  uint64_t seeds[8] = {200, 201, 202, 203, 204, 205, 206, 207};
+  uint64_t out1[4], out2[4];
+
+  _sphur_simd_neon_xorshiro_128_plus(seeds, out1);
+  _sphur_simd_neon_xorshiro_128_plus(seeds, out2);
+
+  // outputs should differ
+  int same = memcmp(out1, out2, sizeof(out1));
+  assert(same != 0);
+
+  dump_u64_buf("NEON out1", out1, 4);
+  dump_u64_buf("NEON out2", out2, 4);
+}
+
+#endif
+
+// -----------------------------------------------------------------------------
 // Main
 // -----------------------------------------------------------------------------
 
 int main(void) {
   printf("----SIMD TESTS----\n\n");
 
+#if defined(__aarch64__) || defined(_M_ARM64)
+  test_neon_null_args();
+  test_neon_basic_run();
+  test_neon_multiple_runs();
+#else
   test_avx2_null_args();
   test_avx2_basic_run();
   test_avx2_multiple_runs();
@@ -137,6 +201,7 @@ int main(void) {
   test_sse2_null_args();
   test_sse2_basic_run();
   test_sse2_multiple_runs();
+#endif
 
   printf("▶ All tests passed!\n\n");
   return 0;
