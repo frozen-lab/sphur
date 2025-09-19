@@ -28,17 +28,17 @@ jobs:
             arch: x86_64
             use-flake: false
             
-          # - os: windows-11-arm
-          #   arch: aarch64
-          #   use-flake: false
+          - os: windows-11-arm
+            arch: aarch64
+            use-flake: false
 
           - os: macos-13
             arch: x86_64
             use-flake: true
             
-          # - os: macos-latest
-          #   arch: aarch64
-          #   use-flake: true
+          - os: macos-latest
+            arch: aarch64
+            use-flake: true
             
     runs-on: ${{ matrix.os }}
     
@@ -101,19 +101,10 @@ jobs:
         if: matrix.use-flake == true
         working-directory: ./clib
         run: |
-          if [ "${{ matrix.arch }}" = "aarch64" ]; then
-            nix develop .#clib_a64 --command bash -c "
-              make -f make_a64
-              make -f make_a64 test
-              make -f make_a64 example
-            "
-          else
-            nix develop .#clib_x64 --command bash -c "
-              make -f make_x64
-              make -f make_x64 test
-              make -f make_x64 example
-            "
-          fi
+          nix develop .#clib --command bash -c "
+            make test
+            make example
+          "
 
       #
       # CPU Info (WIN) (w/o Nix)
@@ -141,9 +132,8 @@ jobs:
         working-directory: ./clib
         shell: msys2 {0}
         run: |
-          make -f make_x64
-          make -f make_x64 test
-          make -f make_x64 example
+          make test
+          make example
           
       #
       # Win (AArch64) (w/o nix)
@@ -164,6 +154,5 @@ jobs:
         run: |
           which clang
           clang --version
-          make -f make_a64
-          make -f make_a64 test
-          make -f make_a64 example
+          make test
+          make example

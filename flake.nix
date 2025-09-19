@@ -50,7 +50,7 @@
               echo " : $(gcc --version)"
             '';
           };
-          clib_prod = pkgs.mkShell {
+          clib = pkgs.mkShell {
             name = "clib-prod";
             buildInputs = with pkgs; [
               gcc
