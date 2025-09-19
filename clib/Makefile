@@ -31,9 +31,11 @@ $(BUILD_DIR):
 
 test: tests
 	@for t in $(TEST_BINS); do echo "Running $$t..."; $$t || exit 1; done
+	$(MAKE) clean
 
 example: examples
 	@for e in $(EXAMPLE_BINS); do echo ""; echo "Running $$e..."; $$e || exit 1; done
+	$(MAKE) clean
 
 clean:
 	rm -rf $(BUILD_DIR)
