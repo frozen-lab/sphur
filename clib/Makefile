@@ -33,7 +33,7 @@ test: tests
 	@for t in $(TEST_BINS); do echo "Running $$t..."; $$t || exit 1; done
 
 example: examples
-	@for e in $(EXAMPLE_BINS); do echo "Running $$e..."; $$e || exit 1; done
+	@for e in $(EXAMPLE_BINS); do echo ""; echo "Running $$e..."; $$e || exit 1; done
 
 clean:
 	rm -rf $(BUILD_DIR)
