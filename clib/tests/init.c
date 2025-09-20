@@ -7,7 +7,6 @@ void test_init(void) {
   int rc = sphur_init(&ctx);
 
   assert(rc == 0);
-  assert(ctx._rbuf == NULL);
   assert(ctx._rcnt == 0);
   assert(ctx._rpos == 0);
 
@@ -23,7 +22,6 @@ void test_init_seeded(void) {
   int rc = sphur_init_seeded(&ctx, 123456789ULL);
 
   assert(rc == 0);
-  assert(ctx._rbuf == NULL);
   assert(ctx._rcnt == 0);
   assert(ctx._rpos == 0);
 

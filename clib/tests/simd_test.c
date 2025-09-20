@@ -37,7 +37,7 @@ static void test_avx2_basic_run(void) {
   uint64_t out[4] = {0};
 
   int ret = _sphur_simd_avx2_xorshiro_128_plus(seeds, out);
-  assert(ret == 0);
+  assert(ret == 4);
 
   // ensure output was filled (nonzero)
   int allzero = 1;
@@ -96,7 +96,7 @@ static void test_sse2_basic_run(void) {
   uint64_t out[2] = {0};
 
   int ret = _sphur_simd_sse2_xorshiro_128_plus(seeds, out);
-  assert(ret == 0);
+  assert(ret == 2);
 
   // output not all zero
   int allzero = (out[0] == 0 && out[1] == 0);
@@ -146,7 +146,7 @@ static void test_neon_basic_run(void) {
   uint64_t out[4] = {0};
 
   int ret = _sphur_simd_neon_xorshiro_128_plus(seeds, out);
-  assert(ret == 0);
+  assert(ret == 2);
 
   // ensure output not all zero
   int allzero = 1;

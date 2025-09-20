@@ -42,16 +42,14 @@ typedef enum {
 //
 // uint64_t _seeds[8] => sub-seeds used for prng mixer
 // uint64_t _rands[4] => internal storage of random numbers
-// uint64_t *_rbuf => buffer pointer for _rands, default to NULL
-// unsigned _rcnt => number of rands in _rands (1..4)
-// unsigned _rpos => positon of number in _rands (0..3)
+// unsigned _rcnt => number of nums in buffer in _rands (0..4)
+// unsigned _rpos => current idx in _rands (0..3)
 // _sphur_simd_ext_t _simd_ext => SIMD extension id (based on the availability)
 //
 // NOTE: `_rands` is intentionally NOT zeroed on init.
 typedef struct {
   uint64_t _seeds[8];
   uint64_t _rands[4];
-  uint64_t *_rbuf;
   unsigned _rcnt;
   unsigned _rpos;
   _sphur_simd_ext_t _simd_ext;
@@ -115,53 +113,6 @@ static inline void _sphur_splitmix64_generate(uint64_t seed, uint64_t *buf,
   }
 }
 
-// check if internal rand buffer is empty
-static inline int _sphur_rands_empty(const sphur_t *state) {
-  return state == NULL || state->_rbuf == NULL || state->_rcnt == 0;
-}
-
-// mark filled internal rand buffer w/ `count` (count <= 4)
-static inline void _sphur_rands_mark_filled(sphur_t *state, unsigned count) {
-  if (!state)
-    return;
-
-  if (count == 0 || count > 4) {
-    state->_rbuf = NULL;
-    state->_rpos = 0;
-    state->_rcnt = 0;
-
-    return;
-  }
-
-  state->_rbuf = state->_rands;
-  state->_rpos = 0;
-  state->_rcnt = count;
-}
-
-// consume one random value from the buffer
-static inline void _sphur_rands_consume_one(sphur_t *state) {
-  if (!state || state->_rbuf == NULL || state->_rcnt == 0)
-    return;
-
-  ++state->_rpos;
-
-  // exhausted
-  if (state->_rpos >= state->_rcnt) {
-    state->_rbuf = NULL;
-    state->_rcnt = 0;
-    state->_rpos = 0;
-  }
-}
-
-// get next available random without modifying state
-static inline int _sphur_rands_peek(const sphur_t *state, uint64_t *out) {
-  if (!state || state->_rbuf == NULL || state->_rcnt == 0 || !out)
-    return -1;
-
-  *out = state->_rbuf[state->_rpos];
-  return 0;
-}
-
 // -----------------------------------------------------------------------------
 // SIMD Intrinsics
 // -----------------------------------------------------------------------------
@@ -169,6 +120,8 @@ static inline int _sphur_rands_peek(const sphur_t *state, uint64_t *out) {
 #if defined(__aarch64__) || defined(_M_ARM64)
 
 // Generate 4 prng's w/ aarch64 neon using 8 sub-seeds
+//
+// Returns no. of PRNG's generated
 //
 // NOTE: The sub-seeds are updated after PRNG generation
 static inline int _sphur_simd_neon_xorshiro_128_plus(uint64_t *seeds,
@@ -222,12 +175,14 @@ static inline int _sphur_simd_neon_xorshiro_128_plus(uint64_t *seeds,
   vst1q_u64(seeds + 4, new_s0);
   vst1q_u64(seeds + 6, rol36);
 
-  return 0;
+  return 2;
 }
 
 #else
 
 // Generate 4 prng's w/ x86_64 AVX2 using 8 sub-seeds
+//
+// Returns no. of PRNG's generated
 //
 // NOTE: The sub-seeds are updated after PRNG generation
 __attribute__((target("avx2"))) static inline int
@@ -279,10 +234,12 @@ _sphur_simd_avx2_xorshiro_128_plus(uint64_t *seeds, uint64_t *out) {
   // avoid AVX -> SSE transition penalty (just in case)
   _mm256_zeroupper();
 
-  return 0;
+  return 4;
 }
 
 // Generate 2 prng's w/ x86_64 SSE2 using 4 sub-seeds
+//
+// Returns no. of PRNG's generated
 //
 // NOTE: The sub-seeds are updated after PRNG generation
 //
@@ -334,7 +291,7 @@ _sphur_simd_sse2_xorshiro_128_plus(uint64_t *seeds, uint64_t *out) {
   _mm_storeu_si128((__m128i *)(seeds), new_s0);
   _mm_storeu_si128((__m128i *)(seeds + 2), new_s1);
 
-  return 0;
+  return 2;
 }
 
 #endif
@@ -375,7 +332,6 @@ static inline int sphur_init(sphur_t *state) {
 #endif
 
   _sphur_splitmix64_generate(seed, state->_seeds, 8);
-  state->_rbuf = NULL;
   state->_rpos = 0;
   state->_rcnt = 0;
 
@@ -393,7 +349,6 @@ static inline int sphur_init_seeded(sphur_t *state, uint64_t seed) {
 #endif
 
   _sphur_splitmix64_generate(seed, state->_seeds, 8);
-  state->_rbuf = NULL;
   state->_rpos = 0;
   state->_rcnt = 0;
 
@@ -401,21 +356,32 @@ static inline int sphur_init_seeded(sphur_t *state, uint64_t seed) {
 }
 
 // Generate a random number
-static inline uint64_t sphur_gen_rand(sphur_t *state) {
+static inline __attribute__((always_inline)) uint64_t
+sphur_gen_rand(sphur_t *state) {
   if (!state)
     return -1;
 
-  // generate new rand values if no rands in buffer
-  if (_sphur_rands_empty(state)) {
-    _sphur_simd_xorshiro_128_plus(state);
-    _sphur_rands_mark_filled(state, 4);
+  // if empty refill buf
+  if (__builtin_expect(state->_rcnt == 0, 0)) {
+
+    int gen_count = _sphur_simd_xorshiro_128_plus(state);
+
+    // error occurred while generating random numbers
+    if (gen_count == -1) {
+      return -1;
+    }
+
+    state->_rpos = 0;
+    state->_rcnt = gen_count;
   }
 
-  // fetch rand from current position
-  uint64_t out = state->_rands[state->_rpos];
+  uint64_t out = state->_rands[state->_rpos++];
 
-  // advance position
-  _sphur_rands_consume_one(state);
+  // buffer consumed
+  if (state->_rpos >= state->_rcnt) {
+    state->_rcnt = 0;
+    state->_rpos = 0;
+  }
 
   return out;
 }
