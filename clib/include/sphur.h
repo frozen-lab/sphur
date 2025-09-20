@@ -1,3 +1,31 @@
+// Sphūr (स्फुर्) is SIMD accelerated Pseudo-Random Number Generator.
+// It's fast, header-only, and designed for 64-bit numbers.
+//
+// Copyright 2025-2026 Aditya Motale
+// SPDX-License-Identifier: Apache-2.0
+//
+// ## Example,
+//
+// ```c
+// #include "sphur.h"
+// #include <stdint.h>
+// #include <stdio.h>
+//
+// int main(void) {
+//   sphur_t rng;
+//
+//   if (sphur_init(&rng) != 0) {
+//     printf("Failed to init sphur\n");
+//     return 1;
+//   }
+//
+//   uint64_t dice = sphur_gen_rand_range(&rng, 1, 6);
+//   printf("Rolled a dice: %llu\n", dice);
+//
+//   return 0;
+// }
+// ```
+
 #ifndef SPHUR_H
 #define SPHUR_H
 
@@ -36,17 +64,11 @@ typedef enum {
   SPHUR_SIMD_SSE2 = 1,
 } _sphur_simd_ext_t;
 
-// High performance pseudo-random number generator
+// Sphūr is SIMD accelerated Pseudo-Random Number Generator
 //
-// It holds,
+// Internally, it keeps a small buffer of random numbers, and
+// it uses multiple "sub-seeds" for better distribution.
 //
-// uint64_t _seeds[8] => sub-seeds used for prng mixer
-// uint64_t _rands[4] => internal storage of random numbers
-// unsigned _rcnt => number of nums in buffer in _rands (0..4)
-// unsigned _rpos => current idx in _rands (0..3)
-// _sphur_simd_ext_t _simd_ext => SIMD extension id (based on the availability)
-//
-// NOTE: `_rands` is intentionally NOT zeroed on init.
 typedef struct {
   uint64_t _seeds[8];
   uint64_t _rands[4];
@@ -309,7 +331,20 @@ static inline int _sphur_simd_xorshiro_128_plus(sphur_t *state) {
 // Public Interface
 // -----------------------------------------------------------------------------
 
-// Initialize sphur_t state
+// Initialize sphur state
+//
+// ## Returns,
+//
+// Returns 0 on success, -1 on failure
+//
+// ## Example,
+//
+// ```c
+// sphur_t rng;
+// if (sphur_init(&rng) != 0) {
+//     printf("Failed to init PRNG\n");
+// }
+// ```
 static inline int sphur_init(sphur_t *state) {
   if (!state)
     return -1;
@@ -328,7 +363,20 @@ static inline int sphur_init(sphur_t *state) {
   return 0;
 }
 
-// Initialize sphur_t state w/ an initial seed
+// Initialize sphur state w/ an initial seed
+//
+// ## Returns,
+//
+// Returns 0 on success, -1 on failure
+//
+// ## Example,
+//
+// ```c
+// sphur_t rng;
+// if (sphur_init_seeded(&rng, 123456789ULL) != 0) {
+//     printf("Failed to init PRNG\n");
+// }
+// ```
 static inline int sphur_init_seeded(sphur_t *state, uint64_t seed) {
   if (!state)
     return -1;
@@ -345,7 +393,21 @@ static inline int sphur_init_seeded(sphur_t *state, uint64_t seed) {
   return 0;
 }
 
-// Generate a random number
+// Generate a 64-bit Random Number
+//
+// NOTE: Behind the scenes we keep a small buffer of
+// 2/4 numbers based on the SIMD capabilities available.
+//
+// ## Returns,
+//
+// Returns 0 on success, -1 on failure
+//
+// ## Example
+//
+// ```c
+// uint64_t r = sphur_gen_rand(&rng);
+// printf("Random: %llu\n", r);
+// ```
 static inline __attribute__((always_inline)) uint64_t
 sphur_gen_rand(sphur_t *state) {
   if (!state)
@@ -376,7 +438,18 @@ sphur_gen_rand(sphur_t *state) {
   return out;
 }
 
-// Generate a random boolean (1 or 0)
+// Generate a Random Boolean (0 or 1)
+//
+// ## Returns,
+//
+// Returns `-1` on failure
+//
+// ## Example
+//
+// ```c
+// int coin = sphur_gen_bool(&rng);
+// printf("Coin: %s\n", coin ? "Heads" : "Tails");
+// ```
 static inline int sphur_gen_bool(sphur_t *state) {
   if (!state)
     return -1;
@@ -385,7 +458,21 @@ static inline int sphur_gen_bool(sphur_t *state) {
   return (int)(sphur_gen_rand(state) & 1ULL);
 }
 
-// Generate a random number in the range [min, max] (inclusive)
+// Generate a Random Number in a Range [min, max] (both inclusive)
+//
+// NOTE: We handle modulo bias using rejection sampling.
+//
+// ## Returns,
+//
+// - Returns `0` if min > mix
+// - Returns `-1` on failure
+//
+// ## Example,
+//
+// ```c
+// uint64_t dice = sphur_gen_rand_range(&rng, 1, 6);
+// printf("Rolled a dice: %llu\n", dice);
+// ```
 static inline uint64_t sphur_gen_rand_range(sphur_t *state, uint64_t min,
                                             uint64_t max) {
   if (!state || min > max)
@@ -397,6 +484,7 @@ static inline uint64_t sphur_gen_rand_range(sphur_t *state, uint64_t min,
 
   uint64_t r = sphur_gen_rand(state);
 
+  // fast path (works >90% of the time)
   if (r <= limit)
     return min + (r % span);
 
