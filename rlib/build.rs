@@ -1,20 +1,13 @@
-use std::process::Command;
-
 fn main() {
-    // re-run if asm code has changed
-    println!("cargo:rerun-if-changed=../asm/linux_x86.asm");
+    // Re-run if any headers or wrapper source change
+    println!("cargo:rerun-if-changed=wrapper/wrapper.c");
+    println!("cargo:rerun-if-changed=wrapper/wrapper.h");
+    println!("cargo:rerun-if-changed=../clib/include/sphur.h");
 
-    let out_dir = std::env::var("OUT_DIR").unwrap();
-    let obj_path = format!("{}/linux_x86.o", out_dir);
-
-    // build asm
-    let status = Command::new("nasm")
-        .args(&["-f", "elf64", "../asm/linux_x86.asm", "-o", &obj_path])
-        .status()
-        .expect("failed to run nasm");
-
-    assert!(status.success(), "nasm failed");
-
-    // link object file
-    println!("cargo:rustc-link-arg={}", obj_path);
+    cc::Build::new()
+        .file("wrapper/wrapper.c")
+        .include("wrapper")
+        .include("../clib/include")
+        .flag_if_supported("-O2")
+        .compile("sphur_wrapper");
 }

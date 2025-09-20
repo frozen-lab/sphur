@@ -2,5 +2,12 @@
 name = "sphur"
 version = "0.0.1"
 edition = "2024"
+description = "Sphūr (स्फुर्) is SIMD accelerated Pseudo-Random Number Generator."
+license = "Apache-2.0"
+repository = "https://github.com/frozen-lab/sphur"
+keywords = ["prng", "simd", "random", "rng", "random-number-generator", "simd-accelerated", "entropy", "seed"]
 
 [dependencies]
+
+[build-dependencies]
+cc = "1.2.38"
