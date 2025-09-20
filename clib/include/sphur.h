@@ -400,7 +400,7 @@ static inline int sphur_init_seeded(sphur_t *state, uint64_t seed) {
   return 0;
 }
 
-// Generate random numbers
+// Generate a random number
 static inline uint64_t sphur_gen_rand(sphur_t *state) {
   if (!state)
     return -1;
@@ -418,6 +418,37 @@ static inline uint64_t sphur_gen_rand(sphur_t *state) {
   _sphur_rands_consume_one(state);
 
   return out;
+}
+
+// Generate a random boolean (1 or 0)
+static inline int sphur_gen_bool(sphur_t *state) {
+  if (!state)
+    return -1;
+
+  // mask lowest bit of random num
+  return (int)(sphur_gen_rand(state) & 1ULL);
+}
+
+// Generate a random number in the range [min, max] (inclusive)
+static inline uint64_t sphur_gen_rand_range(sphur_t *state, uint64_t min,
+                                            uint64_t max) {
+  if (!state || min > max)
+    return 0;
+
+  // rejection sampling to avoid modulo bias
+  uint64_t span = max - min + 1;
+  uint64_t limit = UINT64_MAX - (UINT64_MAX % span);
+
+  uint64_t r = sphur_gen_rand(state);
+
+  if (r <= limit)
+    return min + (r % span);
+
+  do {
+    r = sphur_gen_rand(state);
+  } while (r > limit);
+
+  return min + (r % span);
 }
 
 #endif
