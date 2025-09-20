@@ -11,3 +11,8 @@ keywords = ["prng", "simd", "random", "rng", "random-number-generator", "simd-ac
 
 [build-dependencies]
 cc = "1.2.38"
+
+[[bench]]
+name = "bench"
+path = "benchmarks/bench.rs"
+harness = false
