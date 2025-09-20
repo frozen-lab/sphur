@@ -20,6 +20,25 @@ It's fast, header-only, and designed for 64-bit numbers.
 | macOS x86_64     |    ✅     |
 | macOS ARM64      |    ✅     |
 
+## Benchmarks
+
+| Metric                   | Value     |
+| ------------------------ |:---------:|
+| Throughput (numbers/µs)  | 228.57    |
+| Chi-squared (uniformity) | 264.78    |
+| Autocorrelation (lag 1)  | 0.01811   |
+
+**📝 Notes:**
+
+- Sphūr generates 228.57 numbers/µs, which is good enough for normal usage. You can generate about
+  **228.57 million numbers per second** using AVX2!
+- The _Chi-Squared_ represents uniformity. It represents how evenly distributed the generated numbers
+  are across 256 bins. The prefect uniform distribution is `NUM_BINS - 1 = 255`. Sphūr's `264.78` is
+  very close to the expected value and well within normal statistical variation.
+- _Autocorrelation_ represents the correlation between consecutive random numbers. Ideally, consecutive
+  numbers should be independent, giving a value close to `0`. Sphūr's `0.01811` is very low, indicating
+  almost no correlation between successive numbers.
+
 ## Installation
 
 Simply download the header file,
