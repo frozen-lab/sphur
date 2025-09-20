@@ -39,7 +39,12 @@ It's fast, header-only, and designed for 64-bit numbers.
   numbers should be independent, giving a value close to `0`. Sphūr's `0.01811` is very low, indicating
   almost no correlation between successive numbers.
 
-![Distribution Plot](./assets/dist_plot.png)
+<div align="center">
+ <figure>
+   <img src="./assets/dist_plot.png" alt="Distribution Plot" />
+   <figcaption>Distribution Plot (clib w/ 10K samples)</figcaption>
+ </figure>
+</div>
 
 ## Installation
 
