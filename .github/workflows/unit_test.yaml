@@ -155,3 +155,84 @@ jobs:
           clang --version
           make test
           make example
+
+  rlib-test:
+    needs: clib-test
+    
+    strategy:
+      fail-fast: false
+      
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+            use-flake: true
+            
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+            use-flake: true
+            
+          - os: windows-latest
+            arch: x86_64
+            use-flake: false
+            
+          - os: windows-11-arm
+            arch: aarch64
+            use-flake: false
+            
+          - os: macos-13
+            arch: x86_64
+            use-flake: true
+            
+          - os: macos-latest
+            arch: aarch64
+            use-flake: true
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      #
+      # Linux & Mac (w/ Nix)
+      # 
+      - name: Install Nix
+        if: matrix.use-flake == true
+        uses: nixbuild/nix-quick-install-action@v33
+
+      - name: Cargo test (Linux/macOS)
+        if: matrix.use-flake == true
+        working-directory: ./rlib
+        run: |
+          nix develop .#rlib --command bash -c "
+            cargo test --release --verbose
+          "
+
+      #
+      # Windows (w/ Msys2)
+      # 
+      - uses: msys2/setup-msys2@v2
+        if: matrix.use-flake == false
+        with:
+          update: true
+          msystem: ${{ matrix.arch == 'x86_64' && 'MINGW64' || 'clangarm64' }}
+          install: >-
+            make
+            mingw-w64-${{ matrix.arch == 'x86_64' && 'x86_64' || 'clang-aarch64' }}-gcc
+
+      - name: Install Rust (Windows)
+        if: matrix.use-flake == false
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Rust deps (Windows)
+        if: matrix.use-flake == false
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo test (Windows)
+        if: matrix.use-flake == false
+        working-directory: ./rlib
+        run: cargo test --release --verbose
+        

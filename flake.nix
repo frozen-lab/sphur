@@ -61,6 +61,21 @@
               echo " : $(gcc --version)"
             '';
           };
+          rlib = pkgs.mkShell {
+            name = "clib-prod";
+            buildInputs = with pkgs; [
+              gcc
+              gnumake
+              pkg-config
+              rustc
+              cargo
+            ];
+  
+            shellHook = ''
+              echo " : $(gcc --version)"
+              echo " : $(rustc --version)"
+            '';
+          };
         };
        }
     );
