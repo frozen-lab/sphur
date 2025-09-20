@@ -2,6 +2,7 @@
 // It's fast, header-only, and designed for 64-bit numbers.
 //
 // Copyright 2025-2026 Aditya Motale
+// Version: 0.0.1
 // SPDX-License-Identifier: Apache-2.0
 //
 // ## Example,
@@ -20,7 +21,7 @@
 //   }
 //
 //   uint64_t dice = sphur_gen_rand_range(&rng, 1, 6);
-//   printf("Rolled a dice: %llu\n", dice);
+//   printf("Rolled a dice: %lu\n", dice);
 //
 //   return 0;
 // }
