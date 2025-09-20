@@ -19,6 +19,7 @@
 !**.lock
 !**.json
 !**.gyp
+!**.png
 !Makefile
 
 # ignore build files

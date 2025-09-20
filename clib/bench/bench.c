@@ -108,7 +108,7 @@ int main() {
   benchmark_randomness(numbers, NUM_RANDOM);
 
   // Save numbers for Python plotting
-  save_numbers_to_file(numbers, NUM_RANDOM, "./build/random_numbers.txt");
+  save_numbers_to_file(numbers, NUM_RANDOM, "./build/prngs.txt");
 
   free(numbers);
   printf("Done ✅\n");

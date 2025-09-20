@@ -39,6 +39,8 @@ It's fast, header-only, and designed for 64-bit numbers.
   numbers should be independent, giving a value close to `0`. Sphūr's `0.01811` is very low, indicating
   almost no correlation between successive numbers.
 
+![Distribution Plot](./assets/dist_plot.png)
+
 ## Installation
 
 Simply download the header file,
@@ -119,4 +121,3 @@ printf("Rolled a dice: %llu\n", dice);
 int coin = sphur_gen_bool(&rng);
 printf("Coin flip: %s\n", coin ? "Heads" : "Tails");
 ```
-
