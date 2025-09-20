@@ -119,11 +119,13 @@ static inline void _sphur_splitmix64_generate(uint64_t seed, uint64_t *buf,
 
 #if defined(__aarch64__) || defined(_M_ARM64)
 
-// Generate 4 prng's w/ aarch64 neon using 8 sub-seeds
+// Generate 2 prng's w/ aarch64 neon using 4 sub-seeds
 //
 // Returns no. of PRNG's generated
 //
 // NOTE: The sub-seeds are updated after PRNG generation
+//
+// NOTE: Only the initial 4 of 8 sub-seeds are being used here
 static inline int _sphur_simd_neon_xorshiro_128_plus(uint64_t *seeds,
                                                      uint64_t *out) {
   // sanity check
@@ -142,6 +144,10 @@ static inline int _sphur_simd_neon_xorshiro_128_plus(uint64_t *seeds,
   // store 2 outputs
   vst1q_u64(out, res);
 
+  //
+  // Update state
+  //
+
   // s1 ^= s0
   s1 = veorq_u64(s1, s0);
 
@@ -158,22 +164,6 @@ static inline int _sphur_simd_neon_xorshiro_128_plus(uint64_t *seeds,
   // store updated state
   vst1q_u64(seeds, new_s0);
   vst1q_u64(seeds + 2, rol36);
-
-  // repeat once more for seeds[4..7] to produce next 2 outputs
-  s0 = vld1q_u64(seeds + 4);
-  s1 = vld1q_u64(seeds + 6);
-
-  res = vaddq_u64(s0, s1);
-  vst1q_u64(out + 2, res);
-
-  s1 = veorq_u64(s1, s0);
-  rol55 = vsliq_n_u64(vshrq_n_u64(s0, 9), s0, 55);
-  s1_sh14 = vshlq_n_u64(s1, 14);
-  new_s0 = veorq_u64(veorq_u64(rol55, s1), s1_sh14);
-  rol36 = vsliq_n_u64(vshrq_n_u64(s1, 28), s1, 36);
-
-  vst1q_u64(seeds + 4, new_s0);
-  vst1q_u64(seeds + 6, rol36);
 
   return 2;
 }

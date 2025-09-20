@@ -83,14 +83,14 @@ static void test_avx2_output_count(void) {
   uint64_t out[4];
 
   for (int i = 0; i < 4; i++)
-    out[i] = 0xDEADBEEFCAFEBABEULL;
+    out[i] = 0;
 
   int ret = _sphur_simd_avx2_xorshiro_128_plus(seeds, out);
   assert(ret == 4);
 
   // check exactly first 4 entries changed
   for (int i = 0; i < 4; i++)
-    assert(out[i] != 0xDEADBEEFCAFEBABEULL);
+    assert(out[i] != 0);
 }
 
 #endif
@@ -146,18 +146,18 @@ static void test_sse2_output_count(void) {
   uint64_t out[4];
 
   for (int i = 0; i < 4; i++)
-    out[i] = 0xDEADBEEFCAFEBABEULL;
+    out[i] = 0;
 
   int ret = _sphur_simd_sse2_xorshiro_128_plus(seeds, out);
   assert(ret == 2);
 
   // check first 2 changed
   for (int i = 0; i < 2; i++)
-    assert(out[i] != 0xDEADBEEFCAFEBABEULL);
+    assert(out[i] != 0);
 
   // check remaining 2 untouched
   for (int i = 2; i < 4; i++)
-    assert(out[i] == 0xDEADBEEFCAFEBABEULL);
+    assert(out[i] == 0);
 }
 
 #endif
@@ -222,18 +222,18 @@ static void test_neon_output_count(void) {
   uint64_t out[4];
 
   for (int i = 0; i < 4; i++)
-    out[i] = 0xDEADBEEFCAFEBABEULL;
+    out[i] = 0;
 
   int ret = _sphur_simd_neon_xorshiro_128_plus(seeds, out);
   assert(ret == 2);
 
   // check first 2 changed
   for (int i = 0; i < 2; i++)
-    assert(out[i] != 0xDEADBEEFCAFEBABEULL);
+    assert(out[i] != 0);
 
   // check remaining 2 untouched
   for (int i = 2; i < 4; i++)
-    assert(out[i] == 0xDEADBEEFCAFEBABEULL);
+    assert(out[i] == 0);
 }
 
 #endif
