@@ -16,6 +16,16 @@ pub struct Sphur {
 }
 
 impl Sphur {
+    pub fn new() -> Self {
+        let seed = platform_seed();
+
+        Self {
+            state: Self::init_state(seed),
+            isa: detect_isa(),
+            idx: 0,
+        }
+    }
+
     pub fn new_seeded(seed: u64) -> Self {
         Self {
             state: Self::init_state(seed),
@@ -78,17 +88,35 @@ fn detect_isa() -> ISA {
     ISA::NEON
 }
 
+#[cfg(target_arch = "x86_64")]
+pub fn platform_seed() -> u64 {
+    use std::arch::asm;
+
+    unsafe {
+        let mut lo: u32;
+        let mut hi: u32;
+
+        asm!("rdtsc", out("eax") lo, out("edx") hi);
+
+        ((hi as u64) << 32) | (lo as u64)
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+pub fn platform_seed() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+
+    // Combine seconds and nanoseconds into a u64
+    ((now.as_secs() as u64) << 32) ^ (now.subsec_nanos() as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_detect_isa_returns_valid_value() {
-        match detect_isa() {
-            ISA::AVX2 | ISA::SSE2 | ISA::NEON => {}
-            _ => panic!("Unknown ISA detected"),
-        }
-    }
 
     #[test]
     fn test_detect_isa_is_correct() {
@@ -108,9 +136,58 @@ mod tests {
     }
 
     #[test]
+    fn test_platform_seed_non_zero() {
+        let seed = platform_seed();
+        assert_ne!(seed, 0, "Platform seed should not be zero");
+    }
+
+    #[test]
+    fn test_platform_seed_changes() {
+        let seed1 = platform_seed();
+
+        // tiny delay
+        std::thread::sleep(std::time::Duration::from_micros(1));
+
+        let seed2 = platform_seed();
+
+        assert_ne!(
+            seed1, seed2,
+            "Two calls to platform_seed should differ over time"
+        );
+    }
+
+    #[test]
+    fn test_new_initializes_state() {
+        let sphur = Sphur::new();
+
+        assert!(
+            sphur.state.iter().any(|&x| x != 0),
+            "State should not be all zero"
+        );
+
+        assert_eq!(sphur.idx, 0);
+    }
+
+    #[test]
+    fn test_new_different_seeds_generate_different_states() {
+        let sphur1 = Sphur::new();
+
+        // Slight delay ensures platform_seed changes
+        std::thread::sleep(std::time::Duration::from_micros(1));
+
+        let sphur2 = Sphur::new();
+
+        assert_ne!(
+            sphur1.state, sphur2.state,
+            "Different platform seeds should generate different states"
+        );
+    }
+
+    #[test]
     fn test_state_first_element_matches_seed() {
         let seed = 42u64;
         let sphur = Sphur::new_seeded(seed);
+
         assert_eq!(sphur.state[0], seed as u128);
     }
 
@@ -140,6 +217,7 @@ mod tests {
     #[test]
     fn test_no_zero_elements_after_seed() {
         let sphur = Sphur::new_seeded(987654321u64);
+
         for (i, &val) in sphur.state.iter().enumerate() {
             assert_ne!(val, 0, "State element {} should not be zero", i);
         }
@@ -150,6 +228,7 @@ mod tests {
         let seed = 2025u64;
         let state_from_init = Sphur::init_state(seed);
         let sphur = Sphur::new_seeded(seed);
+
         assert_eq!(
             state_from_init, sphur.state,
             "init_state should match new_seeded output"
