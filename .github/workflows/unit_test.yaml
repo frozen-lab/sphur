@@ -209,27 +209,13 @@ jobs:
           "
 
       #
-      # Win (x86_64) (w/o nix)
-      # 
-      - uses: msys2/setup-msys2@v2
-        if: matrix.use-flake == false && matrix.arch == 'x86_64'
-        with:
-          update: true
-          install: >-
-            make
-            mingw-w64-x86_64-gcc
-          
+      # Windows (MSVC toolchain)
       #
-      # Win (AArch64) (w/o nix)
-      # 
-      - uses: msys2/setup-msys2@v2
-        if: matrix.use-flake == false && matrix.arch == 'aarch64'
+      - name: Setup MSVC environment
+        if: matrix.use-flake == false
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          update: true
-          msystem: clangarm64
-          install: >-
-            make
-            mingw-w64-clang-aarch64-clang
+          arch: ${{ matrix.arch }}
 
       - name: Install Rust (Windows)
         if: matrix.use-flake == false
@@ -237,6 +223,7 @@ jobs:
         with:
           toolchain: stable
           override: true
+          target: ${{ matrix.arch == 'aarch64' && 'aarch64-pc-windows-msvc' || 'x86_64-pc-windows-msvc' }}
 
       - name: Cache Rust deps (Windows)
         if: matrix.use-flake == false
@@ -246,4 +233,3 @@ jobs:
         if: matrix.use-flake == false
         working-directory: ./rlib
         run: cargo test --release --verbose
-        
