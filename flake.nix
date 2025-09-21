@@ -11,17 +11,12 @@
       in {
         devShells = {
           default = pkgs.mkShell {
-            name = "dev-mode";
+            name = "dev";
             buildInputs = with pkgs; [
-              # c/asm
+              # c
               gcc
-              gcc.libc
               gdb
-              glibc.static
               perf
-              pkg-config
-              gnumake
-              clang-tools
             
               # rust
               rustc
@@ -48,32 +43,6 @@
               echo " : $(python3 --version)"
               echo " : $(node --version)"
               echo " : $(gcc --version)"
-            '';
-          };
-          clib = pkgs.mkShell {
-            name = "clib-prod";
-            buildInputs = with pkgs; [
-              gcc
-              gnumake
-            ];
-  
-            shellHook = ''
-              echo " : $(gcc --version)"
-            '';
-          };
-          rlib = pkgs.mkShell {
-            name = "clib-prod";
-            buildInputs = with pkgs; [
-              gcc
-              gnumake
-              pkg-config
-              rustc
-              cargo
-            ];
-  
-            shellHook = ''
-              echo " : $(gcc --version)"
-              echo " : $(rustc --version)"
             '';
           };
         };
