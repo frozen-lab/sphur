@@ -1,27 +1,3 @@
-# Ignore everything by default
-*
-
-# Allow subdirectories to be checked
-!*/
-
-# Allow following
-!**.c
-!**.h
-!**.js
-!**.rs
-!**.py
-!**.nix
-!**.sh
-!**.md
-!**.gitignore
-!**.toml
-!**.yaml
-!**.lock
-!**.json
-!**.gyp
-!**.png
-!Makefile
-
 # ignore build files
 **/__pycache__/
 **/target/
