@@ -1,4 +1,4 @@
-#include "wrapper.h"
+#include "sphur.h"
 
 int sphur_init_wrapper(sphur_t *state) { return sphur_init(state); }
 
