@@ -215,7 +215,7 @@ jobs:
         if: matrix.use-flake == false
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: ${{ matrix.arch }}
+          arch: ${{ matrix.arch == 'aarch64' && 'arm64' || 'x64' }}
 
       - name: Install Rust (Windows)
         if: matrix.use-flake == false

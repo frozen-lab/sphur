@@ -41,9 +41,20 @@
 
 #else
 
+#if defined(_MSC_VER)
+
+// MSVC
+#include <intrin.h>
+
+#else
+
+// GCC/Clang
+
 #include <cpuid.h>
 #include <emmintrin.h>
 #include <immintrin.h>
+
+#endif
 
 #endif
 
