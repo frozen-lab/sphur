@@ -1,3 +1,49 @@
+//! # Sphūr
+//!
+//! **Sphūr** is a SIMD™ accelerated PRNG built on top of the
+//! [SFMT (SIMD-oriented Fast Mersenne Twister)](https://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/).
+//!
+//! ## Platform Support
+//!
+//! - ✅ Linux (x86_64, aarch64)
+//! - ✅ macOS (x86_64, aarch64)
+//! - ✅ Windows (x86_64, aarch64)
+//!
+//! **WARN:** 32-bit targets are **not supported**.
+//!
+//! ## Quick Start
+//!
+//! ```
+//! use sphur::Sphur;
+//!
+//! fn main() {
+//!     // auto seed state w/ platform entropy
+//!     let mut rng = Sphur::new();
+//!
+//!     // Generate prng's
+//!     let x128: u128 = rng.gen_u128();
+//!     let x64: u64 = rng.gen_u64();
+//!     let x32: u32 = rng.gen_u32();
+//!     let flag: bool = rng.gen_bool();
+//!
+//!     let bounded = rng.gen_range(10..20);
+//!     assert!(bounded >= 10 && bounded < 20);
+//!
+//!     // Reproducible streams with a custom seed
+//!     let mut rng1 = Sphur::new_seeded(12345);
+//!     let mut rng2 = Sphur::new_seeded(12345);
+//!
+//!     assert_eq!(rng1.gen_u64(), rng2.gen_u64());
+//!
+//!     // Bulk generation
+//!     let batch = rng.gen_batch();
+//!     assert_eq!(batch.len(), 32);
+//! }
+//! ```
+//!
+//! **NOTE:** Sphūr is **not cryptographically secure**.  
+//!
+
 const N_STATE: usize = 16;
 
 // -----------------------------------------------------------------------------
