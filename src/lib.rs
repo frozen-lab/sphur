@@ -312,6 +312,53 @@ mod avx2 {
     }
 }
 
+#[cfg(target_arch = "aarch64")]
+mod neon {
+    use super::{State, N_STATE};
+    use core::arch::aarch64::*;
+
+    const POS1: usize = 122 % N_STATE;
+    const SL1: i32 = 18;
+    const SR1: i32 = 11;
+    const SL2: i32 = 1;
+    const SR2: i32 = 1;
+
+    #[target_feature(enable = "neon")]
+    pub unsafe fn twist_block(state: &mut State) {
+        unsafe {
+            for i in 0..N_STATE {
+                let x_i_ptr = state.0.as_ptr().add(i) as *const uint64x2_t;
+                let x_i = vld1q_u64(x_i_ptr);
+
+                let idx_pos = (i + POS1) % N_STATE;
+                let x_pos_ptr = state.0.as_ptr().add(idx_pos) as *const uint64x2_t;
+                let x_pos = vld1q_u64(x_pos_ptr);
+
+                let idx_m1 = (i + N_STATE - 1) % N_STATE;
+                let x_m1_ptr = state.0.as_ptr().add(idx_m1) as *const uint64x2_t;
+                let x_m1 = vld1q_u64(x_m1_ptr);
+
+                let idx_m2 = (i + N_STATE - 2) % N_STATE;
+                let x_m2_ptr = state.0.as_ptr().add(idx_m2) as *const uint64x2_t;
+                let x_m2 = vld1q_u64(x_m2_ptr);
+
+                // y = x_i ^ (x_i << SL1) ^ (x_pos >> SR1) ^ (x_m1 >> SR2) ^ (x_m2 << SL2)
+                let mut y = x_i;
+
+                y = veorq_u64(y, vshlq_n_u64(x_i, SL1 as i32)); // shift left
+                y = veorq_u64(y, vshrq_n_u64(x_pos, SR1 as i32)); // shift right
+                y = veorq_u64(y, vshrq_n_u64(x_m1, SR2 as i32));
+                y = veorq_u64(y, vshlq_n_u64(x_m2, SL2 as i32));
+
+                let out_ptr = state.0.as_mut_ptr().add(i) as *mut uint64x2_t;
+
+                // store back the state
+                vst1q_u64(out_ptr, y);
+            }
+        }
+    }
+}
+
 /// Custom result type for [Sphur]
 pub type SphurResult<T> = Result<T, SphurError>;
 
