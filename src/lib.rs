@@ -272,8 +272,8 @@ impl ISA {
 }
 
 #[cfg(test)]
-mod init_tests {
-    use super::*;
+mod isa_tests {
+    use super::ISA;
 
     #[test]
     fn test_detect_isa_is_correct() {
@@ -291,6 +291,11 @@ mod init_tests {
             _ => panic!("Unknown ISA detected for aarch64"),
         }
     }
+}
+
+#[cfg(test)]
+mod init_tests {
+    use super::*;
 
     #[test]
     fn test_platform_seed_non_zero() {
@@ -390,5 +395,106 @@ mod init_tests {
             state_from_init, sphur.state,
             "init_state should match new_seeded output"
         );
+    }
+}
+
+#[cfg(test)]
+mod rand_gen_tests {
+    use super::*;
+
+    const TEST_SEED: u64 = 0xDEAD_BEEF_CAFE_BABE;
+
+    #[test]
+    fn test_deterministic_u64_u128() {
+        let mut rng1 = Sphur::new_seeded(TEST_SEED);
+        let mut rng2 = Sphur::new_seeded(TEST_SEED);
+
+        for _ in 0..100 {
+            assert_eq!(
+                rng1.gen_u64(),
+                rng2.gen_u64(),
+                "gen_u64 should be deterministic for same seed"
+            );
+            assert_eq!(
+                rng1.gen_u128(),
+                rng2.gen_u128(),
+                "gen_u128 should be deterministic for same seed"
+            );
+        }
+    }
+
+    #[test]
+    fn test_gen_u32_lanes() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        let mut seen = [0u32; 4];
+
+        for i in 0..4 {
+            seen[i] = rng.gen_u32();
+        }
+
+        assert!(
+            seen.iter().any(|&v| v != 0),
+            "at least one lane should be non-zero"
+        );
+    }
+
+    #[test]
+    fn test_gen_range_exclusive() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        for _ in 0..1000 {
+            let x = rng.gen_range(10..20);
+            assert!(
+                x >= 10 && x < 20,
+                "gen_range exclusive returned out-of-range value: {}",
+                x
+            );
+        }
+    }
+
+    #[test]
+    fn test_gen_bool_distribution() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        let mut trues = 0;
+        let mut falses = 0;
+
+        for _ in 0..10_000 {
+            if rng.gen_bool() {
+                trues += 1;
+            } else {
+                falses += 1;
+            }
+        }
+
+        let ratio = trues as f64 / (trues + falses) as f64;
+        assert!(
+            (0.45..0.55).contains(&ratio),
+            "gen_bool distribution skewed: {} trues / {} falses = {}",
+            trues,
+            falses,
+            ratio
+        );
+    }
+
+    #[test]
+    fn test_full_u128_entropy() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        let mut words = [0u128; N_STATE];
+        for i in 0..N_STATE {
+            words[i] = rng.gen_u128();
+        }
+
+        // Ensure no duplicates in one state block
+        for i in 0..N_STATE {
+            for j in i + 1..N_STATE {
+                assert_ne!(
+                    words[i], words[j],
+                    "all u128s in a block should be distinct"
+                );
+            }
+        }
     }
 }
