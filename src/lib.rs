@@ -1,6 +1,36 @@
 const N_STATE: usize = 16;
 
-/// Sphūr is SIMD accelerated Pseudo-Random Number Generator.
+// -----------------------------------------------------------------------------
+// Architecture guard!
+// Sphūr only supports 64-bit architectures (x86_64 and AArch64).
+// -----------------------------------------------------------------------------
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+compile_error!("[ERROR]: Sphūr requires 64-bit architecture (x86_64 or AArch64). 32-bit targets (i386/armv7) are not supported.");
+
+/// Sphūr is a SIMD™ accelerated PRNG based on the SFMT algorithm.
+///
+/// ### Example
+///
+/// ```
+/// use sphur::Sphur;
+///
+/// let mut rng = Sphur::new_seeded(0x9e3779b97f4a7c15);
+///
+/// let val: u128 = rng.gen_u128();
+/// assert!(val >= 0);
+///
+/// let u64_val: u64 = rng.gen_u64();
+/// assert!(u64_val >= 0);
+///
+/// let u32_val: u32 = rng.gen_u32();
+/// assert!(u32_val >= 0);
+///
+/// let ranged_val: u64 = rng.gen_range(10..100);
+/// assert!(ranged_val >= 10);
+///
+/// let flag: bool = rng.gen_bool();
+/// assert!(flag == true || flag == false);
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct Sphur {
     /// Internal state for SFMT twister
@@ -18,6 +48,18 @@ pub struct Sphur {
 struct State([u128; N_STATE]);
 
 impl Sphur {
+    /// Initialize [Sphur] state from the platform's entropy source.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use sphur::Sphur;
+    ///
+    /// let mut rng = Sphur::new();
+    /// let val = rng.gen_u128();
+    ///
+    /// assert!(val >= 0);
+    /// ```
     pub fn new() -> Self {
         let seed = Self::platform_seed();
 
@@ -28,6 +70,18 @@ impl Sphur {
         }
     }
 
+    /// Initialize sphur state w/ an initial seed
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use sphur::Sphur;
+    ///
+    /// let mut rng1 = Sphur::new_seeded(123);
+    /// let mut rng2 = Sphur::new_seeded(123);
+    ///
+    /// assert_eq!(rng1.gen_u64(), rng2.gen_u64());
+    /// ```
     pub fn new_seeded(seed: u64) -> Self {
         Self {
             state: Self::init_state(seed),
@@ -36,6 +90,18 @@ impl Sphur {
         }
     }
 
+    /// Generate a 128-bit unsigned random number.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use sphur::Sphur;
+    ///
+    /// let mut rng = Sphur::new();
+    /// let val: u128 = rng.gen_u128();
+    ///
+    /// assert!(val > 0);
+    /// ```
     pub fn gen_u128(&mut self) -> u128 {
         if self.idx >= N_STATE {
             self.update_state();
@@ -47,7 +113,18 @@ impl Sphur {
         v
     }
 
-    /// Generates a batch of 32 u64 values from the current state.
+    /// Generate a batch of 32 `u64` values.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use sphur::Sphur;
+    ///
+    /// let mut rng = Sphur::new();
+    /// let batch: [u64; 32] = rng.gen_batch();
+    ///
+    /// assert_eq!(batch.len(), 32);
+    /// ```
     ///
     /// NOTE: This consumes the entire state (16 * 128-bit).
     pub fn gen_batch(&mut self) -> [u64; N_STATE * 2] {
@@ -64,7 +141,20 @@ impl Sphur {
         out
     }
 
-    /// Generate a random `u64` inside an exclusive range [start, end).
+    /// Generate a random `u64` in the exclusive range `[start, end)`.
+    ///
+    /// NOTE: Includes assertion for `start >= end`.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use sphur::Sphur;
+    ///
+    /// let mut rng = Sphur::new();
+    /// let val = rng.gen_range(10..20);
+    ///
+    /// assert!(val >= 10 && val < 20);
+    /// ```
     pub fn gen_range(&mut self, range: core::ops::Range<u64>) -> u64 {
         assert!(range.start < range.end, "gen_range: empty range");
 
@@ -79,12 +169,25 @@ impl Sphur {
 
         loop {
             let x = self.gen_u64();
+
             if x < zone {
                 return range.start + (x % span);
             }
         }
     }
 
+    /// Generate a 64-bit unsigned random nunber.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use sphur::Sphur;
+    ///
+    /// let mut rng = Sphur::new();
+    /// let val: u64 = rng.gen_u64();
+    ///
+    /// assert!(val >= 0);
+    /// ```
     pub fn gen_u64(&mut self) -> u64 {
         if self.idx >= N_STATE * 2 {
             self.update_state();
@@ -103,6 +206,18 @@ impl Sphur {
         out
     }
 
+    /// Generate a 32-bit unsigned random nunber.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use sphur::Sphur;
+    ///
+    /// let mut rng = Sphur::new();
+    /// let val: u32 = rng.gen_u32();
+    ///
+    /// assert!(val >= 0);
+    /// ```
     pub fn gen_u32(&mut self) -> u32 {
         if self.idx >= N_STATE * 4 {
             self.update_state();
@@ -133,6 +248,17 @@ impl Sphur {
     }
 
     /// Generate a random boolean value.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use sphur::Sphur;
+    ///
+    /// let mut rng = Sphur::new();
+    /// let b: bool = rng.gen_bool();
+    ///
+    /// assert!(b == true || b == false);
+    /// ```
     #[inline(always)]
     pub fn gen_bool(&mut self) -> bool {
         // just grab 1 random bit
@@ -203,13 +329,6 @@ impl Sphur {
         ((now.as_secs() as u64) << 32) ^ (now.subsec_nanos() as u64)
     }
 }
-
-/// Custom result type for [Sphur]
-pub type SphurResult<T> = Result<T, SphurError>;
-
-/// Types of Error exposed by [Sphur]
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum SphurError {}
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[allow(unused)]
