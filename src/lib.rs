@@ -1,8 +1,3 @@
-#![allow(unused)]
-
-#[cfg(target_arch = "x86_64")]
-use core::panic;
-
 const N_STATE: usize = 16;
 
 /// Sphūr is SIMD accelerated Pseudo-Random Number Generator.
@@ -209,6 +204,65 @@ impl Sphur {
     }
 }
 
+/// Custom result type for [Sphur]
+pub type SphurResult<T> = Result<T, SphurError>;
+
+/// Types of Error exposed by [Sphur]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub enum SphurError {}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[allow(unused)]
+enum ISA {
+    // This SIMD ISA is an upgrade over SSE2 if available at runtime
+    AVX2,
+
+    // This SIMD ISA is default on x64 (x86_64), as it's virtually
+    // available on all x64 CPU's
+    SSE2,
+
+    // Neon is vurtually available on all aarch64 CPU's
+    NEON,
+}
+
+impl ISA {
+    #[cfg(target_arch = "x86_64")]
+    fn detect_isa() -> ISA {
+        if is_x86_feature_detected!("avx2") {
+            return ISA::AVX2;
+        }
+
+        ISA::SSE2
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    fn detect_isa() -> ISA {
+        ISA::NEON
+    }
+}
+
+#[cfg(test)]
+mod isa_tests {
+    use super::ISA;
+
+    #[test]
+    fn test_detect_isa_is_correct() {
+        let isa = ISA::detect_isa();
+
+        #[cfg(target_arch = "x86_64")]
+        match isa {
+            ISA::AVX2 | ISA::SSE2 => {}
+            _ => panic!("Unknown ISA detected for x86_64"),
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        match isa {
+            ISA::NEON => {}
+            _ => panic!("Unknown ISA detected for aarch64"),
+        }
+    }
+}
+
 #[cfg(target_arch = "x86_64")]
 mod sse2 {
     use super::{State, N_STATE};
@@ -359,60 +413,86 @@ mod neon {
     }
 }
 
-/// Custom result type for [Sphur]
-pub type SphurResult<T> = Result<T, SphurError>;
+#[cfg(test)]
+mod simd_tests {
+    #[cfg(target_arch = "aarch64")]
+    use super::neon;
 
-/// Types of Error exposed by [Sphur]
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum SphurError {}
-
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
-enum ISA {
-    // This SIMD ISA is an upgrade over SSE2 if available at runtime
-    AVX2,
-
-    // This SIMD ISA is default on x64 (x86_64), as it's virtually
-    // available on all x64 CPU's
-    SSE2,
-
-    // Neon is vurtually available on all aarch64 CPU's
-    NEON,
-}
-
-impl ISA {
     #[cfg(target_arch = "x86_64")]
-    fn detect_isa() -> ISA {
-        if is_x86_feature_detected!("avx2") {
-            return ISA::AVX2;
+    use super::{avx2, sse2};
+
+    use super::{State, N_STATE};
+
+    fn init_test_state() -> State {
+        let mut state = [0u128; N_STATE];
+
+        for i in 0..N_STATE {
+            state[i] = i as u128 * 0xDEADBEEFCAFEBABE;
         }
 
-        ISA::SSE2
+        State(state)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn test_sse2_twist_block_deterministic() {
+        let mut state1 = init_test_state();
+        let mut state2 = init_test_state();
+
+        unsafe {
+            sse2::twist_block(&mut state1);
+            sse2::twist_block(&mut state2);
+        }
+
+        assert_eq!(
+            state1.0, state2.0,
+            "SSE2 twist_block should be deterministic"
+        );
+
+        for &v in &state1.0 {
+            assert_ne!(v, 0, "SSE2 twist_block should update all lanes");
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn test_avx2_twist_block_deterministic() {
+        let mut state1 = init_test_state();
+        let mut state2 = init_test_state();
+
+        unsafe {
+            avx2::twist_block(&mut state1);
+            avx2::twist_block(&mut state2);
+        }
+
+        assert_eq!(
+            state1.0, state2.0,
+            "AVX2 twist_block should be deterministic"
+        );
+
+        for &v in &state1.0 {
+            assert_ne!(v, 0, "AVX2 twist_block should update all lanes");
+        }
     }
 
     #[cfg(target_arch = "aarch64")]
-    fn detect_isa() -> ISA {
-        ISA::NEON
-    }
-}
-
-#[cfg(test)]
-mod isa_tests {
-    use super::ISA;
-
     #[test]
-    fn test_detect_isa_is_correct() {
-        let isa = ISA::detect_isa();
+    fn test_neon_twist_block_deterministic() {
+        let mut state1 = init_test_state();
+        let mut state2 = init_test_state();
 
-        #[cfg(target_arch = "x86_64")]
-        match isa {
-            ISA::AVX2 | ISA::SSE2 => {}
-            _ => panic!("Unknown ISA detected for x86_64"),
+        unsafe {
+            neon::twist_block(&mut state1);
+            neon::twist_block(&mut state2);
         }
 
-        #[cfg(target_arch = "aarch64")]
-        match isa {
-            ISA::NEON => {}
-            _ => panic!("Unknown ISA detected for aarch64"),
+        assert_eq!(
+            state1.0, state2.0,
+            "NEON twist_block should be deterministic"
+        );
+
+        for &v in &state1.0 {
+            assert_ne!(v, 0, "NEON twist_block should update all lanes");
         }
     }
 }
