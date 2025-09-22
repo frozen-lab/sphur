@@ -1,39 +1,76 @@
 use sphur::Sphur;
-use std::fs::File;
-use std::io::Write;
 use std::time::Instant;
 
-const NUM_BINS: usize = 256;
 const NUM_RANDOM: usize = 10_000;
 
-// Benchmark throughput & store numbers in buffer using gen_batch
-fn benchmark_throughput(rng: &mut Sphur, numbers: &mut [u64]) {
+fn bench_u128(rng: &mut Sphur) -> f64 {
+    let mut buf = [0u128; NUM_RANDOM];
     let start = Instant::now();
 
-    let mut remaining = numbers.len();
-    let mut offset = 0;
-
-    while remaining > 0 {
-        let batch = rng.gen_batch(); // returns [u64; N_STATE*2]
-        let copy_len = remaining.min(batch.len());
-        numbers[offset..offset + copy_len].copy_from_slice(&batch[..copy_len]);
-        offset += copy_len;
-        remaining -= copy_len;
+    for val in buf.iter_mut() {
+        *val = rng.gen_u128();
     }
 
-    let elapsed = start.elapsed();
-    let elapsed_us = elapsed.as_secs_f64() * 1e6;
-    let nums_per_us = numbers.len() as f64 / elapsed_us;
-
-    println!(
-        "Throughput: {:.2} random numbers per microsecond",
-        nums_per_us
-    );
+    let elapsed_us = start.elapsed().as_secs_f64() * 1e6;
+    NUM_RANDOM as f64 / elapsed_us
 }
 
-// Benchmark randomness: histogram & autocorrelation
-fn benchmark_randomness(numbers: &[u64]) {
-    // ▶ Histogram / uniformity
+fn bench_u64(rng: &mut Sphur) -> f64 {
+    let mut buf = [0u64; NUM_RANDOM];
+    let start = Instant::now();
+
+    for val in buf.iter_mut() {
+        *val = rng.gen_u64();
+    }
+
+    let elapsed_us = start.elapsed().as_secs_f64() * 1e6;
+    NUM_RANDOM as f64 / elapsed_us
+}
+
+fn bench_u32(rng: &mut Sphur) -> f64 {
+    let mut buf = [0u32; NUM_RANDOM];
+    let start = Instant::now();
+
+    for val in buf.iter_mut() {
+        *val = rng.gen_u32();
+    }
+
+    let elapsed_us = start.elapsed().as_secs_f64() * 1e6;
+    NUM_RANDOM as f64 / elapsed_us
+}
+
+fn bench_bool(rng: &mut Sphur) -> f64 {
+    let mut buf = [false; NUM_RANDOM];
+    let start = Instant::now();
+
+    for val in buf.iter_mut() {
+        *val = rng.gen_bool();
+    }
+
+    let elapsed_us = start.elapsed().as_secs_f64() * 1e6;
+    NUM_RANDOM as f64 / elapsed_us
+}
+
+fn bench_batch(rng: &mut Sphur) -> f64 {
+    let mut total = 0;
+    let start = Instant::now();
+    let mut iterations = NUM_RANDOM / (16 * 2);
+
+    while iterations > 0 {
+        let batch = rng.gen_batch();
+        total += batch.len();
+        iterations -= 1;
+    }
+
+    let elapsed_us = start.elapsed().as_secs_f64() * 1e6;
+    total as f64 / elapsed_us
+}
+
+// ================== Randomness Stats ==================
+const NUM_BINS: usize = 256;
+
+fn benchmark_randomness(numbers: &[u64]) -> (f64, f64) {
+    // ▶ Histogram / uniformity (Chi-squared)
     let mut bins = vec![0usize; NUM_BINS];
 
     for &num in numbers {
@@ -41,15 +78,15 @@ fn benchmark_randomness(numbers: &[u64]) {
     }
 
     let expected = numbers.len() as f64 / NUM_BINS as f64;
+
     let chi2: f64 = bins
         .iter()
         .map(|&count| {
             let diff = count as f64 - expected;
+
             diff * diff / expected
         })
         .sum();
-
-    println!("Chi-squared (uniformity): {:.2}", chi2);
 
     // ▶ Autocorrelation (lag 1)
     let mean: f64 = numbers.iter().copied().map(|x| x as f64).sum::<f64>() / numbers.len() as f64;
@@ -60,40 +97,46 @@ fn benchmark_randomness(numbers: &[u64]) {
     for i in 0..numbers.len() - 1 {
         let x = numbers[i] as f64 - mean;
         let y = numbers[i + 1] as f64 - mean;
+
         num += x * y;
         den += x * x;
     }
 
     let autocorr = num / den;
-    println!("Autocorrelation (lag 1): {:.5}", autocorr);
-}
 
-// Save numbers to file for Python visualization
-fn save_numbers_to_file(numbers: &[u64], filepath: &str) {
-    let mut file = File::create(filepath).expect("failed to create output file");
-
-    for &num in numbers {
-        writeln!(file, "{}", num).expect("failed to write number");
-    }
-
-    println!("Random numbers written to: {}", filepath);
+    (chi2, autocorr)
 }
 
 fn main() {
-    println!("=== Sphur PRNG Benchmark ===");
-
     let mut rng = Sphur::new_seeded(0x9e3779b97f4a7c15);
 
+    let throughput_u128 = bench_u128(&mut rng);
+    let throughput_u64 = bench_u64(&mut rng);
+    let throughput_u32 = bench_u32(&mut rng);
+    let throughput_bool = bench_bool(&mut rng);
+    let throughput_batch = bench_batch(&mut rng);
+
+    println!("\n");
+    println!("| API            | Throughput (numbers/µs) |");
+    println!("|:--------------:|:-----------------------:|");
+    println!("| gen_u128       |  {:>22.2} |", throughput_u128);
+    println!("| gen_u64        |  {:>22.2} |", throughput_u64);
+    println!("| gen_u32        |  {:>22.2} |", throughput_u32);
+    println!("| gen_bool       |  {:>22.2} |", throughput_bool);
+    println!("| gen_batch (32) |  {:>22.2} |", throughput_batch);
+
+    rng = Sphur::new_seeded(0x9e3779b97f4a7c15);
     let mut numbers = vec![0u64; NUM_RANDOM];
 
-    // Generate numbers & benchmark throughput
-    benchmark_throughput(&mut rng, &mut numbers);
+    for val in numbers.iter_mut() {
+        *val = rng.gen_u64();
+    }
 
-    // Benchmark randomness using the same numbers
-    benchmark_randomness(&numbers);
+    let (chi2, autocorr) = benchmark_randomness(&numbers);
 
-    // Save numbers for Python plotting
-    save_numbers_to_file(&numbers, "./target/prngs.txt");
-
-    println!("Done ✅");
+    println!("\n");
+    println!("| Metric          | Value       |");
+    println!("|:---------------:|:-----------:|");
+    println!("| Chi-squared     | {:>10.2}  |", chi2);
+    println!("| Autocorrelation | {:>10.5}  |", autocorr);
 }
