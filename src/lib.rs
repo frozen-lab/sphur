@@ -1,12 +1,15 @@
 #![allow(unused)]
 
+#[cfg(target_arch = "x86_64")]
+use core::panic;
+
 const N_STATE: usize = 16;
 
 /// Sphūr is SIMD accelerated Pseudo-Random Number Generator.
 #[derive(Debug, Clone, Copy)]
 pub struct Sphur {
     /// Internal state for SFMT twister
-    state: [u128; N_STATE],
+    state: State,
 
     /// Isa (Instruction Set Architecture) available at runtime
     isa: ISA,
@@ -14,6 +17,10 @@ pub struct Sphur {
     /// Current idx of the state being used for twister
     idx: usize,
 }
+
+#[repr(align(32))]
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct State([u128; N_STATE]);
 
 impl Sphur {
     pub fn new() -> Self {
@@ -39,7 +46,7 @@ impl Sphur {
             self.update_state();
         }
 
-        let v = self.state[self.idx];
+        let v = self.state.0[self.idx];
         self.idx += 1;
 
         v
@@ -54,7 +61,7 @@ impl Sphur {
 
         let mut out = [0u64; N_STATE * 2];
 
-        for (i, word) in self.state.iter().enumerate() {
+        for (i, word) in self.state.0.iter().enumerate() {
             out[2 * i] = (*word & 0xffff_ffff_ffff_ffff) as u64;
             out[2 * i + 1] = (word >> 64) as u64;
         }
@@ -88,7 +95,7 @@ impl Sphur {
             self.update_state();
         }
 
-        let word = self.state[self.idx >> 1]; // idx/2
+        let word = self.state.0[self.idx >> 1]; // idx/2
         let hi = (word >> 64) as u64;
         let lo = word as u64;
 
@@ -108,7 +115,7 @@ impl Sphur {
         }
 
         // idx / 4 -> u128
-        let word = self.state[self.idx >> 2];
+        let word = self.state.0[self.idx >> 2];
 
         // 4 u32 lanes from u128
         let w0 = word as u32;
@@ -137,7 +144,7 @@ impl Sphur {
         (self.gen_u64() & 1) != 0
     }
 
-    fn init_state(seed: u64) -> [u128; N_STATE] {
+    fn init_state(seed: u64) -> State {
         let mut state = [0u128; 16];
 
         // initial seed
@@ -151,14 +158,25 @@ impl Sphur {
                 .wrapping_add(i as u128);
         }
 
-        state
+        State(state)
     }
 
     fn update_state(&mut self) {
-        match self.isa {
-            ISA::AVX2 => unsafe { sse2::twist_block(&mut self.state) },
-            ISA::SSE2 => unsafe { sse2::twist_block(&mut self.state) },
-            ISA::NEON => {}
+        unsafe {
+            match self.isa {
+                ISA::AVX2 => {
+                    #[cfg(target_arch = "x86_64")]
+                    avx2::twist_block(&mut self.state);
+                }
+                ISA::SSE2 => {
+                    #[cfg(target_arch = "x86_64")]
+                    sse2::twist_block(&mut self.state);
+                }
+                ISA::NEON => {
+                    #[cfg(target_arch = "aarch64")]
+                    neon::twist_block(&mut self.state);
+                }
+            }
         }
 
         self.idx = 0;
@@ -193,7 +211,7 @@ impl Sphur {
 
 #[cfg(target_arch = "x86_64")]
 mod sse2 {
-    use super::N_STATE;
+    use super::{State, N_STATE};
     use std::arch::x86_64::*;
 
     const POS1: usize = 122 % N_STATE;
@@ -203,12 +221,12 @@ mod sse2 {
     const SR2: i32 = 1;
 
     #[target_feature(enable = "sse2")]
-    pub fn twist_block(state: &mut [u128; N_STATE]) {
+    pub fn twist_block(state: &mut State) {
         // sanity check
         debug_assert_eq!(std::mem::size_of::<u128>(), std::mem::size_of::<__m128i>());
 
         unsafe {
-            let ptr = state.as_mut_ptr() as *mut __m128i;
+            let ptr = state.0.as_mut_ptr() as *mut __m128i;
             let vecs: &mut [__m128i; N_STATE] = &mut *(ptr as *mut [__m128i; N_STATE]);
             let mut i = 0;
 
@@ -230,6 +248,65 @@ mod sse2 {
                 _mm_store_si128(&mut vecs[i] as *mut __m128i, y);
 
                 i += 1;
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+mod avx2 {
+    use super::{State, N_STATE};
+    use std::arch::x86_64::*;
+
+    const POS1: usize = 122 % N_STATE;
+    const SL1: i32 = 18;
+    const SR1: i32 = 11;
+    const SL2: i32 = 1;
+    const SR2: i32 = 1;
+
+    #[target_feature(enable = "avx2")]
+    pub unsafe fn twist_block(state: &mut State) {
+        debug_assert_eq!(std::mem::size_of::<u128>(), 16);
+
+        unsafe {
+            for i in 0..N_STATE {
+                let x_i_ptr = state.0.as_ptr().add(i) as *const __m128i;
+                let x_i = _mm_loadu_si128(x_i_ptr);
+
+                let idx_pos = (i + POS1) % N_STATE;
+                let x_pos_ptr = state.0.as_ptr().add(idx_pos) as *const __m128i;
+                let x_pos = _mm_loadu_si128(x_pos_ptr);
+
+                let idx_m1 = (i + N_STATE - 1) % N_STATE;
+                let x_m1_ptr = state.0.as_ptr().add(idx_m1) as *const __m128i;
+                let x_m1 = _mm_loadu_si128(x_m1_ptr);
+
+                let idx_m2 = (i + N_STATE - 2) % N_STATE;
+                let x_m2_ptr = state.0.as_ptr().add(idx_m2) as *const __m128i;
+                let x_m2 = _mm_loadu_si128(x_m2_ptr);
+
+                let mut y = _mm256_set_m128i(_mm_setzero_si128(), x_i); // upper 128 zero, lower x_i
+
+                y = _mm256_xor_si256(y, _mm256_slli_epi64(y, SL1));
+                y = _mm256_xor_si256(
+                    y,
+                    _mm256_srli_epi64(_mm256_set_m128i(_mm_setzero_si128(), x_pos), SR1),
+                );
+                y = _mm256_xor_si256(
+                    y,
+                    _mm256_srli_epi64(_mm256_set_m128i(_mm_setzero_si128(), x_m1), SR2),
+                );
+                y = _mm256_xor_si256(
+                    y,
+                    _mm256_slli_epi64(_mm256_set_m128i(_mm_setzero_si128(), x_m2), SL2),
+                );
+
+                // extract lower 128-bit
+                let y_lo = _mm256_castsi256_si128(y);
+                let out_ptr = state.0.as_mut_ptr().add(i) as *mut __m128i;
+
+                // store back the state
+                _mm_storeu_si128(out_ptr, y_lo);
             }
         }
     }
@@ -323,7 +400,7 @@ mod init_tests {
         let sphur = Sphur::new();
 
         assert!(
-            sphur.state.iter().any(|&x| x != 0),
+            sphur.state.0.iter().any(|&x| x != 0),
             "State should not be all zero"
         );
 
@@ -350,7 +427,7 @@ mod init_tests {
         let seed = 42u64;
         let sphur = Sphur::new_seeded(seed);
 
-        assert_eq!(sphur.state[0], seed as u128);
+        assert_eq!(sphur.state.0[0], seed as u128);
     }
 
     #[test]
@@ -380,7 +457,7 @@ mod init_tests {
     fn test_no_zero_elements_after_seed() {
         let sphur = Sphur::new_seeded(987654321u64);
 
-        for (i, &val) in sphur.state.iter().enumerate() {
+        for (i, &val) in sphur.state.0.iter().enumerate() {
             assert_ne!(val, 0, "State element {} should not be zero", i);
         }
     }
