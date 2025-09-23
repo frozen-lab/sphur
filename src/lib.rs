@@ -1,15 +1,18 @@
 //! # Sphūr
 //!
-//! **Sphūr** is a SIMD™ accelerated PRNG built on top of the
-//! [SFMT (SIMD-oriented Fast Mersenne Twister)](https://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/).
+//! **Sphūr (स्फुर्)** is a SIMD™ accelerated PRNG built on top of the
+//! [SFMT (SIMD-oriented Fast Mersenne Twister)](https://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/SFMT/).
+//!
+//! ## Notes
+//!
+//! > 32-bit targets are **not supported**.
+//! > Sphūr is **not cryptographically secure**.
 //!
 //! ## Platform Support
 //!
 //! - ✅ Linux (x86_64, aarch64)
 //! - ✅ macOS (x86_64, aarch64)
 //! - ✅ Windows (x86_64, aarch64)
-//!
-//! **WARN:** 32-bit targets are **not supported**.
 //!
 //! ## Quick Start
 //!
@@ -40,8 +43,6 @@
 //!     assert_eq!(batch.len(), 32);
 //! }
 //! ```
-//!
-//! **NOTE:** Sphūr is **not cryptographically secure**.  
 //!
 
 const N_STATE: usize = 16;

@@ -1,15 +1,27 @@
 # Sphūr
 
+[![Unit Tests](https://github.com/frozen-lab/sphur/actions/workflows/unit_tests.yaml/badge.svg?branch=master)](https://github.com/frozen-lab/sphur/actions/workflows/unit_tests.yaml)
+[![Crates.io](https://img.shields.io/crates/v/sphur.svg)](https://crates.io/crates/sphur)
+[![Documentation](https://docs.rs/sphur/badge.svg)](https://docs.rs/sphur)
+[![Rust](https://img.shields.io/badge/rust-1.89.0%2B-blue.svg?maxAge=3600)](https://github.com/frozen-lab/sphur/)
+[![Pull Requests](https://img.shields.io/github/issues-pr/frozen-lab/sphur?logo=github&logoColor=white)](https://github.com/frozen-lab/sphur/pulls)
+[![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/frozen-lab/sphur?logo=github&logoColor=white)](https://github.com/frozen-lab/sphur/issues)
+[![License](https://img.shields.io/github/license/frozen-lab/sphur?logo=open-source-initiative&logoColor=white)](https://github.com/frozen-lab/sphur/blob/master/LICENSE)
+
 **Sphūr (स्फुर्)** is a SIMD™ accelerated PRNG built on top of the
 [SFMT (SIMD-oriented Fast Mersenne Twister)](https://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/SFMT/).
+
+> [!WARNING]
+> 32-bit targets are **not supported**.
+
+> [!IMPORTANT]
+> Sphūr is **not cryptographically secure**.  
 
 ## Platform Support
 
 - ✅ Linux (x86_64, aarch64)
 - ✅ macOS (x86_64, aarch64)
 - ✅ Windows (x86_64, aarch64)
-
-**WARN:** 32-bit targets are **not supported**.
 
 ## Benchmarks
 
@@ -69,7 +81,4 @@ fn main() {
 }
 ```
 
-**NOTE:** Sphūr is **not cryptographically secure**.  
-
 Refer to [docs.rs](https://docs.rs/sphur/latest/sphur/) for detailed documentation.
-
