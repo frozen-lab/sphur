@@ -1,6 +1,7 @@
 # Sphūr
 
 [![Unit Tests](https://github.com/frozen-lab/sphur/actions/workflows/unit_tests.yaml/badge.svg?branch=master)](https://github.com/frozen-lab/sphur/actions/workflows/unit_tests.yaml)
+[![Release](https://github.com/frozen-lab/sphur/actions/workflows/release.yaml/badge.svg)](https://github.com/frozen-lab/sphur/actions/workflows/release.yaml)
 [![Crates.io](https://img.shields.io/crates/v/sphur.svg)](https://crates.io/crates/sphur)
 [![Documentation](https://docs.rs/sphur/badge.svg)](https://docs.rs/sphur)
 [![Rust](https://img.shields.io/badge/rust-1.89.0%2B-blue.svg?maxAge=3600)](https://github.com/frozen-lab/sphur/)
@@ -59,6 +60,8 @@ Sphūr's `-0.01556` is very low, indicating almost no correlation between succes
 </div>
 
 ## Quick Start
+
+Read [Sphur](https://docs.rs/sphur/latest/sphur/struct.Sphur.html) docs for usgae guide.
 
 ```rs
 use sphur::Sphur;

@@ -5,14 +5,14 @@
 //!
 //! ## Notes
 //!
-//! > 32-bit targets are **not supported**.
-//! > Sphūr is **not cryptographically secure**.
+//! - 32-bit targets are **not supported**.
+//! - Sphūr is **not cryptographically secure**.
 //!
 //! ## Platform Support
 //!
-//! - ✅ Linux (x86_64, aarch64)
-//! - ✅ macOS (x86_64, aarch64)
-//! - ✅ Windows (x86_64, aarch64)
+//! - Linux (x86_64, aarch64)
+//! - Mac (x86_64, aarch64)
+//! - Windows (x86_64, aarch64)
 //!
 //! ## Quick Start
 //!
@@ -43,12 +43,11 @@
 //!     assert_eq!(batch.len(), 32);
 //! }
 //! ```
-//!
 
 const N_STATE: usize = 16;
 
 // -----------------------------------------------------------------------------
-// Architecture guard!
+// Compile guard!
 // Sphūr only supports 64-bit architectures (x86_64 and AArch64).
 // -----------------------------------------------------------------------------
 #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]

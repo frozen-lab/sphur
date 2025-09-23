@@ -1,3 +1,9 @@
+### V-0.1.2
+
+- Added distribution plot for visulization
+- Updated docs
+- Updated bench script
+
 ### V-0.1.0
 
 - Initial version using SFMT algo
