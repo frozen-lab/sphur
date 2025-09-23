@@ -39,10 +39,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
-          cache-version: 1
-          cache-key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          prefix-key: ${{ runner.os }}-rust
+          key: ${{ hashFiles('**/Cargo.lock') }}
+          cache-on-failure: true
 
       - name: Rust Toolchain
         uses: actions-rs/toolchain@v1
