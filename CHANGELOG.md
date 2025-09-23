@@ -1,3 +1,8 @@
+### V-0.1.0
+
+- Initial version using SFMT algo
+- Support for linux, windows and mac across 64-bit (x86 and aarch64)
+
 ### Proof-Of-Concept in C
 
 - Completed minimal working prototype
