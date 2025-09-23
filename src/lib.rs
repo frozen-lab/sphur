@@ -544,34 +544,36 @@ mod neon {
 
     #[target_feature(enable = "neon")]
     pub unsafe fn twist_block(state: &mut State) {
-        for i in 0..N_STATE {
-            let x_i_ptr = state.0.as_ptr().add(i) as *const u64;
-            let x_i = vld1q_u64(x_i_ptr);
+        unsafe {
+            for i in 0..N_STATE {
+                let x_i_ptr = state.0.as_ptr().add(i) as *const u64;
+                let x_i = vld1q_u64(x_i_ptr);
 
-            let idx_pos = (i + POS1) % N_STATE;
-            let x_pos_ptr = state.0.as_ptr().add(idx_pos) as *const u64;
-            let x_pos = vld1q_u64(x_pos_ptr);
+                let idx_pos = (i + POS1) % N_STATE;
+                let x_pos_ptr = state.0.as_ptr().add(idx_pos) as *const u64;
+                let x_pos = vld1q_u64(x_pos_ptr);
 
-            let idx_m1 = (i + N_STATE - 1) % N_STATE;
-            let x_m1_ptr = state.0.as_ptr().add(idx_m1) as *const u64;
-            let x_m1 = vld1q_u64(x_m1_ptr);
+                let idx_m1 = (i + N_STATE - 1) % N_STATE;
+                let x_m1_ptr = state.0.as_ptr().add(idx_m1) as *const u64;
+                let x_m1 = vld1q_u64(x_m1_ptr);
 
-            let idx_m2 = (i + N_STATE - 2) % N_STATE;
-            let x_m2_ptr = state.0.as_ptr().add(idx_m2) as *const u64;
-            let x_m2 = vld1q_u64(x_m2_ptr);
+                let idx_m2 = (i + N_STATE - 2) % N_STATE;
+                let x_m2_ptr = state.0.as_ptr().add(idx_m2) as *const u64;
+                let x_m2 = vld1q_u64(x_m2_ptr);
 
-            // y = x_i ^ (x_i << SL1) ^ (x_pos >> SR1) ^ (x_m1 >> SR2) ^ (x_m2 << SL2)
-            let mut y = x_i;
+                // y = x_i ^ (x_i << SL1) ^ (x_pos >> SR1) ^ (x_m1 >> SR2) ^ (x_m2 << SL2)
+                let mut y = x_i;
 
-            y = veorq_u64(y, vshlq_n_u64(x_i, SL1 as i32));
-            y = veorq_u64(y, vshrq_n_u64(x_pos, SR1 as i32));
-            y = veorq_u64(y, vshrq_n_u64(x_m1, SR2 as i32));
-            y = veorq_u64(y, vshlq_n_u64(x_m2, SL2 as i32));
+                y = veorq_u64(y, vshlq_n_u64(x_i, SL1 as i32));
+                y = veorq_u64(y, vshrq_n_u64(x_pos, SR1 as i32));
+                y = veorq_u64(y, vshrq_n_u64(x_m1, SR2 as i32));
+                y = veorq_u64(y, vshlq_n_u64(x_m2, SL2 as i32));
 
-            let out_ptr = state.0.as_mut_ptr().add(i) as *mut u64;
+                let out_ptr = state.0.as_mut_ptr().add(i) as *mut u64;
 
-            // store the state back
-            vst1q_u64(out_ptr, y);
+                // store the state back
+                vst1q_u64(out_ptr, y);
+            }
         }
     }
 }
