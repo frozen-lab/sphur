@@ -26,17 +26,18 @@
 
 ## Benchmarks
 
-| API            | Throughput (numbers/µs) |
-|:--------------:|:-----------------------:|
-| gen_u128       |                  314.46 |
-| gen_u64        |                  393.92 |
-| gen_u32        |                  413.33 |
-| gen_bool       |                  373.69 |
-| gen_batch (32) |                  170.49 |
+| API            | Throughput (bits/µs) | Throughput (numbers/µs) |
+|:--------------:|:--------------------:|:-----------------------:|
+| gen_u128       |              4147.48 |                   32.40 |
+| gen_u64        |              1988.69 |                   31.07 |
+| gen_u32        |               999.47 |                   31.23 |
+| gen_batch (32) |             30291.96 |                  473.31 |
 
-According to the benchmakrs, **Sphūr** generates about _393.92_ `u64` numbers/µs,
-which is good enough for normal usage. It means you can generate about ~394 million
+According to the benchmakrs, **Sphūr** generates about _31.07_ `u64` numbers/µs,
+which is good enough for normal usage. It means you can generate about ~31 million
 `u64` numbers per second using AVX2!
+
+### Randomness
 
 | Metric                    | Value       |
 |:-------------------------:|:-----------:|
@@ -51,6 +52,18 @@ within normal statistical variation.
 - **Autocorrelation** represents the correlation between consecutive random numbers.
 Ideally, consecutive numbers should be independent, giving a value close to 0.
 Sphūr's `-0.01556` is very low, indicating almost no correlation between successive numbers.
+
+### Benchmarking Machine
+
+Benchmark were conducted on following potato machine,
+
+| System Info     | Value                                       |
+|:---------------:|:-------------------------------------------:|
+| OS              | NixOS (WSL2)                                |
+| CPU             | Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz   |
+| SIMD ISA        | avx2                                        |
+
+### Distribution Plot
 
 <div align="center">
  <figure>
