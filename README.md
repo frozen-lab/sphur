@@ -55,7 +55,7 @@ Sphūr's `-0.01556` is very low, indicating almost no correlation between succes
 <div align="center">
  <figure>
    <img src="https://raw.githubusercontent.com/frozen-lab/sphur/refs/heads/master/assets/dist_plot.png" alt="Distribution Plot" />
-   <figcaption>Distribution Plot of 1000 `u64` PRNG</figcaption>
+   <figcaption>Distribution Plot of 1000 (u64) PRN's</figcaption>
  </figure>
 </div>
 

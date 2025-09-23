@@ -1,3 +1,8 @@
+### V-0.1.3
+
+- Using median values in bench script
+- Eliminate CPU boost and hot cache bias for benches.
+
 ### V-0.1.2
 
 - Added distribution plot for visulization
