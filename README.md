@@ -51,6 +51,13 @@ within normal statistical variation.
 Ideally, consecutive numbers should be independent, giving a value close to 0.
 Sphūr's `-0.01556` is very low, indicating almost no correlation between successive numbers.
 
+<div align="center">
+ <figure>
+   <img src="https://raw.githubusercontent.com/frozen-lab/sphur/refs/heads/master/assets/dist_plot.png" alt="Distribution Plot" />
+   <figcaption>Distribution Plot</figcaption>
+ </figure>
+</div>
+
 ## Quick Start
 
 ```rs
