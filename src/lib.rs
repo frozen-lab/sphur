@@ -163,9 +163,7 @@ impl Sphur {
         self.state.0
     }
 
-    /// Generate a random `u64` in the exclusive range `[start, end)`.
-    ///
-    /// NOTE: Includes assertion for `start >= end`.
+    /// Generate a random `u64` in the given range (inclusive or exclusive).
     ///
     /// ### Example
     ///
@@ -174,12 +172,17 @@ impl Sphur {
     ///
     /// let mut rng = Sphur::new();
     ///
-    ///
+    /// // Exclusive upper bound
     /// let val1 = rng.gen_range(10..20);
     /// assert!(val1 >= 10 && val1 < 20);
     ///
+    /// // Inclusive upper bound
     /// let val2 = rng.gen_range(1..=5);
     /// assert!(val2 >= 1 && val2 <= 5);
+    ///
+    /// // Single-value inclusive
+    /// let val3 = rng.gen_range(42..=42);
+    /// assert_eq!(val3, 42);
     /// ```
     pub fn gen_range<R: IntoRangeU64>(&mut self, range: R) -> u64 {
         let (start, span) = range.into_bounds();
@@ -596,10 +599,84 @@ impl IntoRangeU64 for core::ops::RangeInclusive<u64> {
     fn into_bounds(self) -> (u64, u64) {
         let start = *self.start();
         let end = *self.end();
+
         assert!(start <= end, "gen_range: empty inclusive range");
 
-        let span = end - start + 1;
-        (start, span)
+        // full 64-bit range
+        if start == 0 && end == u64::MAX {
+            (0, 0)
+        } else {
+            (start, end - start + 1)
+        }
+    }
+}
+
+#[cfg(test)]
+mod into_range_u64_tests {
+    use super::*;
+
+    const TEST_SEED: u64 = 0xBEEF_DEAD_CAFE_BABE;
+
+    #[test]
+    fn test_gen_range_inclusive() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        for _ in 0..1000 {
+            let x = rng.gen_range(1..=5);
+
+            assert!(
+                (1..=5).contains(&x),
+                "gen_range inclusive returned out-of-range value: {}",
+                x
+            );
+        }
+    }
+
+    #[test]
+    fn test_gen_range_single_value() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+        let x = rng.gen_range(42..=42);
+
+        assert_eq!(
+            x, 42,
+            "Single-value inclusive range should return the value itself"
+        );
+    }
+
+    #[test]
+    fn test_gen_range_full_span() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        // Generate multiple values in 0..=u64::MAX
+        for _ in 0..1_000 {
+            let x = rng.gen_range(0..=u64::MAX);
+
+            // Assert that x is within the valid u64 range
+            // (This should always be true)
+            assert!(x <= u64::MAX, "Value exceeded u64::MAX: {}", x);
+        }
+    }
+
+    #[test]
+    fn test_gen_range_inclusive_small() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        // Example of small inclusive range
+        for _ in 0..1_000 {
+            let x = rng.gen_range(1..=5);
+            assert!((1..=5).contains(&x), "Value out of range: {}", x);
+        }
+    }
+
+    #[test]
+    fn test_gen_range_exclusive_small() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        // Example of small exclusive range
+        for _ in 0..1_000 {
+            let x = rng.gen_range(10..20);
+            assert!((10..20).contains(&x), "Value out of range: {}", x);
+        }
     }
 }
 
@@ -816,5 +893,50 @@ mod rand_gen_tests {
             falses,
             ratio
         );
+    }
+
+    #[test]
+    fn test_gen_u64_uniformity_sample() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        let mut counts = [0u32; 10];
+        let n = 100_000;
+
+        for _ in 0..n {
+            let val = rng.gen_range(0..10);
+
+            counts[val as usize] += 1;
+        }
+
+        // Expect roughly uniform distribution across bins
+        let mean = n as f64 / 10.0;
+
+        for &c in &counts {
+            assert!(
+                (0.9 * mean..1.1 * mean).contains(&(c as f64)),
+                "Bin count {} deviates more than 10% from mean {}",
+                c,
+                mean
+            );
+        }
+    }
+
+    #[test]
+    fn test_gen_batch_consistency() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        let batch1 = rng.gen_batch();
+        let batch2 = rng.gen_batch();
+
+        // After a full batch, state should update and produce different output
+        assert_ne!(batch1, batch2, "Consecutive batches should differ");
+    }
+
+    #[test]
+    fn test_gen_batch_length() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+        let batch = rng.gen_batch();
+
+        assert_eq!(batch.len(), N_U64, "Batch length should match N_U64");
     }
 }
