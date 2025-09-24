@@ -827,75 +827,6 @@ mod rand_gen_tests {
     const TEST_SEED: u64 = 0xDEAD_BEEF_CAFE_BABE;
 
     #[test]
-    fn test_deterministic_u64() {
-        let mut rng1 = Sphur::new_seeded(TEST_SEED);
-        let mut rng2 = Sphur::new_seeded(TEST_SEED);
-
-        for _ in 0..100 {
-            assert_eq!(
-                rng1.gen_u64(),
-                rng2.gen_u64(),
-                "gen_u64 should be deterministic for same seed"
-            );
-        }
-    }
-
-    #[test]
-    fn test_gen_u32_lanes() {
-        let mut rng = Sphur::new_seeded(TEST_SEED);
-
-        let mut seen = [0u32; 4];
-
-        for i in 0..4 {
-            seen[i] = rng.gen_u32();
-        }
-
-        assert!(
-            seen.iter().any(|&v| v != 0),
-            "at least one lane should be non-zero"
-        );
-    }
-
-    #[test]
-    fn test_gen_range_exclusive() {
-        let mut rng = Sphur::new_seeded(TEST_SEED);
-
-        for _ in 0..1000 {
-            let x = rng.gen_range(10..20);
-            assert!(
-                x >= 10 && x < 20,
-                "gen_range exclusive returned out-of-range value: {}",
-                x
-            );
-        }
-    }
-
-    #[test]
-    fn test_gen_bool_distribution() {
-        let mut rng = Sphur::new_seeded(TEST_SEED);
-
-        let mut trues = 0;
-        let mut falses = 0;
-
-        for _ in 0..10_000 {
-            if rng.gen_bool() {
-                trues += 1;
-            } else {
-                falses += 1;
-            }
-        }
-
-        let ratio = trues as f64 / (trues + falses) as f64;
-        assert!(
-            (0.45..0.55).contains(&ratio),
-            "gen_bool distribution skewed: {} trues / {} falses = {}",
-            trues,
-            falses,
-            ratio
-        );
-    }
-
-    #[test]
     fn test_gen_u64_uniformity_sample() {
         let mut rng = Sphur::new_seeded(TEST_SEED);
 
@@ -938,5 +869,102 @@ mod rand_gen_tests {
         let batch = rng.gen_batch();
 
         assert_eq!(batch.len(), N_U64, "Batch length should match N_U64");
+    }
+
+    #[test]
+    fn test_deterministic_u64() {
+        let mut rng1 = Sphur::new_seeded(TEST_SEED);
+        let mut rng2 = Sphur::new_seeded(TEST_SEED);
+
+        for _ in 0..100 {
+            assert_eq!(
+                rng1.gen_u64(),
+                rng2.gen_u64(),
+                "gen_u64 should be deterministic for same seed"
+            );
+        }
+    }
+
+    #[test]
+    fn test_gen_u32_lanes() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        let mut seen = [0u32; 4];
+
+        for i in 0..4 {
+            seen[i] = rng.gen_u32();
+        }
+
+        assert!(
+            seen.iter().any(|&v| v != 0),
+            "at least one lane should be non-zero"
+        );
+    }
+
+    #[test]
+    fn test_gen_range_exclusive() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        for _ in 0..1000 {
+            let x = rng.gen_range(10..20);
+
+            assert!(
+                x >= 10 && x < 20,
+                "gen_range exclusive returned out-of-range value: {}",
+                x
+            );
+        }
+    }
+
+    #[test]
+    fn test_gen_range_inclusive() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        for _ in 0..1000 {
+            let x = rng.gen_range(1..=5);
+
+            assert!(
+                x >= 1 && x <= 5,
+                "gen_range inclusive returned out-of-range value: {}",
+                x
+            );
+        }
+    }
+
+    #[test]
+    fn test_gen_range_full_span() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        // Generate multiple values in 0..=u64::MAX to ensure no panic
+        for _ in 0..1000 {
+            let x = rng.gen_range(0..=u64::MAX);
+
+            assert!(x <= u64::MAX, "Value exceeded u64::MAX: {}", x);
+        }
+    }
+
+    #[test]
+    fn test_gen_bool_distribution() {
+        let mut rng = Sphur::new_seeded(TEST_SEED);
+
+        let mut trues = 0;
+        let mut falses = 0;
+
+        for _ in 0..10_000 {
+            if rng.gen_bool() {
+                trues += 1;
+            } else {
+                falses += 1;
+            }
+        }
+
+        let ratio = trues as f64 / (trues + falses) as f64;
+        assert!(
+            (0.45..0.55).contains(&ratio),
+            "gen_bool distribution skewed: {} trues / {} falses = {}",
+            trues,
+            falses,
+            ratio
+        );
     }
 }
