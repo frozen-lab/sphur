@@ -37,14 +37,6 @@ where
 }
 
 fn bench_throughput() {
-    let bench_u128 = bench_bits(
-        || {
-            let mut rng = Sphur::new_seeded(SEED);
-            let _ = rng.gen_u128();
-        },
-        128,
-    );
-
     const BATCH_BITS: usize = 64 * 32;
     let bench_batch = bench_bits(
         || {
@@ -73,11 +65,6 @@ fn bench_throughput() {
     println!("\n");
     println!("| API            | Throughput (bits/µs) | Throughput (numbers/µs) |");
     println!("|:--------------:|:--------------------:|:-----------------------:|");
-    println!(
-        "| gen_u128       | {:>20.2} |  {:>22.2} |",
-        bench_u128,
-        bench_u128 / 128.0
-    );
     println!(
         "| gen_u64        | {:>20.2} |  {:>22.2} |",
         bench_u64,

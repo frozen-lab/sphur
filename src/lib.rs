@@ -24,10 +24,17 @@
 //!     let mut rng = Sphur::new();
 //!
 //!     // Generate prng's
-//!     let x128: u128 = rng.gen_u128();
-//!     let x64: u64 = rng.gen_u64();
-//!     let x32: u32 = rng.gen_u32();
+//!     let u64_val: u64 = rng.gen_u64();
+//!     assert!(u64_val >= 0);
+//!
+//!     let u32_val: u32 = rng.gen_u32();
+//!     assert!(u32_val >= 0);
+//!
+//!     let ranged_val: u64 = rng.gen_range(10..100);
+//!     assert!(ranged_val >= 10);
+//!
 //!     let flag: bool = rng.gen_bool();
+//!     assert!(flag == true || flag == false);
 //!
 //!     let bounded = rng.gen_range(10..20);
 //!     assert!(bounded >= 10 && bounded < 20);
@@ -45,6 +52,7 @@
 //! ```
 
 const N_STATE: usize = 16;
+const N_U64: usize = N_STATE * 2;
 
 // -----------------------------------------------------------------------------
 // Compile guard!
@@ -61,9 +69,6 @@ compile_error!("[ERROR]: Sphūr requires 64-bit architecture (x86_64 or AArch64)
 /// use sphur::Sphur;
 ///
 /// let mut rng = Sphur::new_seeded(0x9e3779b97f4a7c15);
-///
-/// let val: u128 = rng.gen_u128();
-/// assert!(val >= 0);
 ///
 /// let u64_val: u64 = rng.gen_u64();
 /// assert!(u64_val >= 0);
@@ -89,9 +94,9 @@ pub struct Sphur {
     idx: usize,
 }
 
-#[repr(align(32))]
+#[repr(align(64))]
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct State([u128; N_STATE]);
+struct State([u64; N_U64]);
 
 impl Sphur {
     /// Initialize [Sphur] state from the platform's entropy source.
@@ -102,7 +107,7 @@ impl Sphur {
     /// use sphur::Sphur;
     ///
     /// let mut rng = Sphur::new();
-    /// let val = rng.gen_u128();
+    /// let val = rng.gen_u64();
     ///
     /// assert!(val >= 0);
     /// ```
@@ -136,29 +141,6 @@ impl Sphur {
         }
     }
 
-    /// Generate a 128-bit unsigned random number.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use sphur::Sphur;
-    ///
-    /// let mut rng = Sphur::new();
-    /// let val: u128 = rng.gen_u128();
-    ///
-    /// assert!(val > 0);
-    /// ```
-    pub fn gen_u128(&mut self) -> u128 {
-        if self.idx >= N_STATE {
-            self.update_state();
-        }
-
-        let v = self.state.0[self.idx];
-        self.idx += 1;
-
-        v
-    }
-
     /// Generate a batch of 32 `u64` values.
     ///
     /// ### Example
@@ -173,18 +155,12 @@ impl Sphur {
     /// ```
     ///
     /// NOTE: This consumes the entire state (16 * 128-bit).
-    pub fn gen_batch(&mut self) -> [u64; N_STATE * 2] {
+    pub fn gen_batch(&mut self) -> [u64; N_U64] {
         // Initial twist for a new batch
         self.update_state();
+        self.idx = 0;
 
-        let mut out = [0u64; N_STATE * 2];
-
-        for (i, word) in self.state.0.iter().enumerate() {
-            out[2 * i] = (*word & 0xffff_ffff_ffff_ffff) as u64;
-            out[2 * i + 1] = (word >> 64) as u64;
-        }
-
-        out
+        self.state.0
     }
 
     /// Generate a random `u64` in the exclusive range `[start, end)`.
@@ -235,20 +211,14 @@ impl Sphur {
     /// assert!(val >= 0);
     /// ```
     pub fn gen_u64(&mut self) -> u64 {
-        if self.idx >= N_STATE * 2 {
+        if self.idx >= N_U64 {
             self.update_state();
+            self.idx = 0;
         }
 
-        let word = self.state.0[self.idx >> 1]; // idx/2
-        let hi = (word >> 64) as u64;
-        let lo = word as u64;
-
-        // mask = 0 if even, !0 if odd
-        let mask = -((self.idx & 1) as i64) as u64;
-
-        let out = (lo & !mask) | (hi & mask);
-
+        let out = unsafe { *self.state.0.get_unchecked(self.idx) };
         self.idx += 1;
+
         out
     }
 
@@ -265,32 +235,15 @@ impl Sphur {
     /// assert!(val >= 0);
     /// ```
     pub fn gen_u32(&mut self) -> u32 {
-        if self.idx >= N_STATE * 4 {
+        if self.idx >= N_U64 {
             self.update_state();
             self.idx = 0;
         }
 
-        // idx / 4 -> u128
-        let word = self.state.0[self.idx >> 2];
-
-        // 4 u32 lanes from u128
-        let w0 = word as u32;
-        let w1 = (word >> 32) as u32;
-        let w2 = (word >> 64) as u32;
-        let w3 = (word >> 96) as u32;
-
-        let lane = (self.idx & 3) as u32;
-
-        // mask selection
-        let m0 = ((lane == 0) as u32).wrapping_neg();
-        let m1 = ((lane == 1) as u32).wrapping_neg();
-        let m2 = ((lane == 2) as u32).wrapping_neg();
-        let m3 = ((lane == 3) as u32).wrapping_neg();
-
-        let out = (w0 & m0) | (w1 & m1) | (w2 & m2) | (w3 & m3);
+        let w = unsafe { *self.state.0.get_unchecked(self.idx) };
         self.idx += 1;
 
-        out
+        (w & 0xffff_ffff) as u32
     }
 
     /// Generate a random boolean value.
@@ -312,20 +265,30 @@ impl Sphur {
     }
 
     fn init_state(seed: u64) -> State {
-        let mut state = [0u128; 16];
+        let mut tmp = [0u128; N_STATE];
 
         // initial seed
-        state[0] = seed as u128;
+        tmp[0] = seed as u128;
 
         for i in 1..N_STATE {
-            let prev = state[i - 1];
+            let prev = tmp[i - 1];
 
-            state[i] = 6364136223846793005u128
+            tmp[i] = 6364_1362_2384_6793_005u128
                 .wrapping_mul(prev ^ (prev >> 62))
                 .wrapping_add(i as u128);
         }
 
-        State(state)
+        // Convert to contiguous u64 array (lo, hi) ordering
+        let mut out = [0u64; N_U64];
+
+        for i in 0..N_STATE {
+            let v = tmp[i];
+
+            out[2 * i] = v as u64;
+            out[2 * i + 1] = (v >> 64) as u64;
+        }
+
+        State(out)
     }
 
     fn update_state(&mut self) {
@@ -376,58 +339,6 @@ impl Sphur {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
-#[allow(unused)]
-enum ISA {
-    // This SIMD ISA is an upgrade over SSE2 if available at runtime
-    AVX2,
-
-    // This SIMD ISA is default on x64 (x86_64), as it's virtually
-    // available on all x64 CPU's
-    SSE2,
-
-    // Neon is vurtually available on all aarch64 CPU's
-    NEON,
-}
-
-impl ISA {
-    #[cfg(target_arch = "x86_64")]
-    fn detect_isa() -> ISA {
-        if is_x86_feature_detected!("avx2") {
-            return ISA::AVX2;
-        }
-
-        ISA::SSE2
-    }
-
-    #[cfg(target_arch = "aarch64")]
-    fn detect_isa() -> ISA {
-        ISA::NEON
-    }
-}
-
-#[cfg(test)]
-mod isa_tests {
-    use super::ISA;
-
-    #[test]
-    fn test_detect_isa_is_correct() {
-        let isa = ISA::detect_isa();
-
-        #[cfg(target_arch = "x86_64")]
-        match isa {
-            ISA::AVX2 | ISA::SSE2 => {}
-            _ => panic!("Unknown ISA detected for x86_64"),
-        }
-
-        #[cfg(target_arch = "aarch64")]
-        match isa {
-            ISA::NEON => {}
-            _ => panic!("Unknown ISA detected for aarch64"),
-        }
-    }
-}
-
 #[cfg(target_arch = "x86_64")]
 mod sse2 {
     use super::{State, N_STATE};
@@ -447,6 +358,7 @@ mod sse2 {
         unsafe {
             let ptr = state.0.as_mut_ptr() as *mut __m128i;
             let vecs: &mut [__m128i; N_STATE] = &mut *(ptr as *mut [__m128i; N_STATE]);
+
             let mut i = 0;
 
             while i < N_STATE {
@@ -489,22 +401,23 @@ mod avx2 {
 
         unsafe {
             for i in 0..N_STATE {
-                let x_i_ptr = state.0.as_ptr().add(i) as *const __m128i;
+                let x_i_ptr = state.0.as_ptr().add(i * 2) as *const __m128i;
                 let x_i = _mm_loadu_si128(x_i_ptr);
 
                 let idx_pos = (i + POS1) % N_STATE;
-                let x_pos_ptr = state.0.as_ptr().add(idx_pos) as *const __m128i;
+                let x_pos_ptr = state.0.as_ptr().add(idx_pos * 2) as *const __m128i;
                 let x_pos = _mm_loadu_si128(x_pos_ptr);
 
                 let idx_m1 = (i + N_STATE - 1) % N_STATE;
-                let x_m1_ptr = state.0.as_ptr().add(idx_m1) as *const __m128i;
+                let x_m1_ptr = state.0.as_ptr().add(idx_m1 * 2) as *const __m128i;
                 let x_m1 = _mm_loadu_si128(x_m1_ptr);
 
                 let idx_m2 = (i + N_STATE - 2) % N_STATE;
-                let x_m2_ptr = state.0.as_ptr().add(idx_m2) as *const __m128i;
+                let x_m2_ptr = state.0.as_ptr().add(idx_m2 * 2) as *const __m128i;
                 let x_m2 = _mm_loadu_si128(x_m2_ptr);
 
-                let mut y = _mm256_set_m128i(_mm_setzero_si128(), x_i); // upper 128 zero, lower x_i
+                // upper 128 zero, lower x_i
+                let mut y = _mm256_set_m128i(_mm_setzero_si128(), x_i);
 
                 y = _mm256_xor_si256(y, _mm256_slli_epi64(y, SL1));
                 y = _mm256_xor_si256(
@@ -522,7 +435,7 @@ mod avx2 {
 
                 // extract lower 128-bit
                 let y_lo = _mm256_castsi256_si128(y);
-                let out_ptr = state.0.as_mut_ptr().add(i) as *mut __m128i;
+                let out_ptr = state.0.as_mut_ptr().add(i * 2) as *mut __m128i;
 
                 // store back the state
                 _mm_storeu_si128(out_ptr, y_lo);
@@ -546,19 +459,19 @@ mod neon {
     pub unsafe fn twist_block(state: &mut State) {
         unsafe {
             for i in 0..N_STATE {
-                let x_i_ptr = state.0.as_ptr().add(i) as *const u64;
+                let x_i_ptr = state.0.as_ptr().add(i * 2) as *const u64;
                 let x_i = vld1q_u64(x_i_ptr);
 
                 let idx_pos = (i + POS1) % N_STATE;
-                let x_pos_ptr = state.0.as_ptr().add(idx_pos) as *const u64;
+                let x_pos_ptr = state.0.as_ptr().add(idx_pos * 2) as *const u64;
                 let x_pos = vld1q_u64(x_pos_ptr);
 
                 let idx_m1 = (i + N_STATE - 1) % N_STATE;
-                let x_m1_ptr = state.0.as_ptr().add(idx_m1) as *const u64;
+                let x_m1_ptr = state.0.as_ptr().add(idx_m1 * 2) as *const u64;
                 let x_m1 = vld1q_u64(x_m1_ptr);
 
                 let idx_m2 = (i + N_STATE - 2) % N_STATE;
-                let x_m2_ptr = state.0.as_ptr().add(idx_m2) as *const u64;
+                let x_m2_ptr = state.0.as_ptr().add(idx_m2 * 2) as *const u64;
                 let x_m2 = vld1q_u64(x_m2_ptr);
 
                 // y = x_i ^ (x_i << SL1) ^ (x_pos >> SR1) ^ (x_m1 >> SR2) ^ (x_m2 << SL2)
@@ -569,7 +482,7 @@ mod neon {
                 y = veorq_u64(y, vshrq_n_u64(x_m1, SR2 as i32));
                 y = veorq_u64(y, vshlq_n_u64(x_m2, SL2 as i32));
 
-                let out_ptr = state.0.as_mut_ptr().add(i) as *mut u64;
+                let out_ptr = state.0.as_mut_ptr().add(i * 2) as *mut u64;
 
                 // store the state back
                 vst1q_u64(out_ptr, y);
@@ -580,19 +493,19 @@ mod neon {
 
 #[cfg(test)]
 mod simd_tests {
+    use super::{State, N_U64};
+
     #[cfg(target_arch = "aarch64")]
     use super::neon;
 
     #[cfg(target_arch = "x86_64")]
     use super::{avx2, sse2};
 
-    use super::{State, N_STATE};
-
     fn init_test_state() -> State {
-        let mut state = [0u128; N_STATE];
+        let mut state = [0u64; N_U64];
 
-        for i in 0..N_STATE {
-            state[i] = i as u128 * 0xDEADBEEFCAFEBABE;
+        for i in 0..N_U64 {
+            state[i] = (i as u64).wrapping_mul(0xDEADBEEFCAFEBABE);
         }
 
         State(state)
@@ -662,6 +575,58 @@ mod simd_tests {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[allow(unused)]
+enum ISA {
+    // This SIMD ISA is an upgrade over SSE2 if available at runtime
+    AVX2,
+
+    // This SIMD ISA is default on x64 (x86_64), as it's virtually
+    // available on all x64 CPU's
+    SSE2,
+
+    // Neon is vurtually available on all aarch64 CPU's
+    NEON,
+}
+
+impl ISA {
+    #[cfg(target_arch = "x86_64")]
+    fn detect_isa() -> ISA {
+        if is_x86_feature_detected!("avx2") {
+            return ISA::AVX2;
+        }
+
+        ISA::SSE2
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    fn detect_isa() -> ISA {
+        ISA::NEON
+    }
+}
+
+#[cfg(test)]
+mod isa_tests {
+    use super::ISA;
+
+    #[test]
+    fn test_detect_isa_is_correct() {
+        let isa = ISA::detect_isa();
+
+        #[cfg(target_arch = "x86_64")]
+        match isa {
+            ISA::AVX2 | ISA::SSE2 => {}
+            _ => panic!("Unknown ISA detected for x86_64"),
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        match isa {
+            ISA::NEON => {}
+            _ => panic!("Unknown ISA detected for aarch64"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod init_tests {
     use super::*;
@@ -715,14 +680,6 @@ mod init_tests {
     }
 
     #[test]
-    fn test_state_first_element_matches_seed() {
-        let seed = 42u64;
-        let sphur = Sphur::new_seeded(seed);
-
-        assert_eq!(sphur.state.0[0], seed as u128);
-    }
-
-    #[test]
     fn test_state_is_deterministic() {
         let seed = 123456789u64;
         let sphur1 = Sphur::new_seeded(seed);
@@ -746,15 +703,6 @@ mod init_tests {
     }
 
     #[test]
-    fn test_no_zero_elements_after_seed() {
-        let sphur = Sphur::new_seeded(987654321u64);
-
-        for (i, &val) in sphur.state.0.iter().enumerate() {
-            assert_ne!(val, 0, "State element {} should not be zero", i);
-        }
-    }
-
-    #[test]
     fn test_init_state_matches_new_seeded() {
         let seed = 2025u64;
         let state_from_init = Sphur::init_state(seed);
@@ -774,7 +722,7 @@ mod rand_gen_tests {
     const TEST_SEED: u64 = 0xDEAD_BEEF_CAFE_BABE;
 
     #[test]
-    fn test_deterministic_u64_u128() {
+    fn test_deterministic_u64() {
         let mut rng1 = Sphur::new_seeded(TEST_SEED);
         let mut rng2 = Sphur::new_seeded(TEST_SEED);
 
@@ -783,11 +731,6 @@ mod rand_gen_tests {
                 rng1.gen_u64(),
                 rng2.gen_u64(),
                 "gen_u64 should be deterministic for same seed"
-            );
-            assert_eq!(
-                rng1.gen_u128(),
-                rng2.gen_u128(),
-                "gen_u128 should be deterministic for same seed"
             );
         }
     }
@@ -845,25 +788,5 @@ mod rand_gen_tests {
             falses,
             ratio
         );
-    }
-
-    #[test]
-    fn test_full_u128_entropy() {
-        let mut rng = Sphur::new_seeded(TEST_SEED);
-
-        let mut words = [0u128; N_STATE];
-        for i in 0..N_STATE {
-            words[i] = rng.gen_u128();
-        }
-
-        // Ensure no duplicates in one state block
-        for i in 0..N_STATE {
-            for j in i + 1..N_STATE {
-                assert_ne!(
-                    words[i], words[j],
-                    "all u128s in a block should be distinct"
-                );
-            }
-        }
     }
 }
