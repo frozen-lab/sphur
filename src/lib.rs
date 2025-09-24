@@ -173,27 +173,30 @@ impl Sphur {
     /// use sphur::Sphur;
     ///
     /// let mut rng = Sphur::new();
-    /// let val = rng.gen_range(10..20);
     ///
-    /// assert!(val >= 10 && val < 20);
+    ///
+    /// let val1 = rng.gen_range(10..20);
+    /// assert!(val1 >= 10 && val1 < 20);
+    ///
+    /// let val2 = rng.gen_range(1..=5);
+    /// assert!(val2 >= 1 && val2 <= 5);
     /// ```
-    pub fn gen_range(&mut self, range: core::ops::Range<u64>) -> u64 {
-        assert!(range.start < range.end, "gen_range: empty range");
+    pub fn gen_range<R: IntoRangeU64>(&mut self, range: R) -> u64 {
+        let (start, span) = range.into_bounds();
 
-        let span = range.end - range.start;
-
-        // full 64-bit space
+        // full 64-bit space: just draw directly
         if span == 0 {
             return self.gen_u64();
         }
 
+        // rejection sampling to remove bias
         let zone = u64::MAX - (u64::MAX % span);
 
         loop {
             let x = self.gen_u64();
 
             if x < zone {
-                return range.start + (x % span);
+                return start + (x % span);
             }
         }
     }
@@ -572,6 +575,31 @@ mod simd_tests {
         for &v in &state1.0 {
             assert_ne!(v, 0, "NEON twist_block should update all lanes");
         }
+    }
+}
+
+pub trait IntoRangeU64 {
+    /// Returns (start, span) from a range object where span > 0.
+    fn into_bounds(self) -> (u64, u64);
+}
+
+impl IntoRangeU64 for core::ops::Range<u64> {
+    fn into_bounds(self) -> (u64, u64) {
+        assert!(self.start < self.end, "gen_range: empty exclusive range");
+
+        let span = self.end - self.start;
+        (self.start, span)
+    }
+}
+
+impl IntoRangeU64 for core::ops::RangeInclusive<u64> {
+    fn into_bounds(self) -> (u64, u64) {
+        let start = *self.start();
+        let end = *self.end();
+        assert!(start <= end, "gen_range: empty inclusive range");
+
+        let span = end - start + 1;
+        (start, span)
     }
 }
 
