@@ -2,6 +2,7 @@
 
 [![Unit Tests](https://github.com/frozen-lab/sphur/actions/workflows/unit_tests.yaml/badge.svg?branch=master)](https://github.com/frozen-lab/sphur/actions/workflows/unit_tests.yaml)
 [![Release](https://github.com/frozen-lab/sphur/actions/workflows/release.yaml/badge.svg)](https://github.com/frozen-lab/sphur/actions/workflows/release.yaml)
+[![Downloads](https://img.shields.io/crates/d/sphur.svg)](https://crates.io/crates/sphur)
 [![Crates.io](https://img.shields.io/crates/v/sphur.svg)](https://crates.io/crates/sphur)
 [![Documentation](https://docs.rs/sphur/badge.svg)](https://docs.rs/sphur)
 [![Rust](https://img.shields.io/badge/rust-1.89.0%2B-blue.svg?maxAge=3600)](https://github.com/frozen-lab/sphur/)
@@ -28,9 +29,8 @@
 
 | API            | Throughput (bits/µs) | Throughput (numbers/µs) |
 |:--------------:|:--------------------:|:-----------------------:|
-| gen_u128       |              4147.48 |                   32.40 |
-| gen_u64        |              1988.69 |                   31.07 |
-| gen_u32        |               999.47 |                   31.23 |
+| gen_u64        |              2160.26 |                   33.75 |
+| gen_u32        |              1088.21 |                   34.01 |
 | gen_batch (32) |             30291.96 |                  473.31 |
 
 According to the benchmakrs, **Sphūr** generates about _31.07_ `u64` numbers/µs,
@@ -80,27 +80,33 @@ Read [Sphur](https://docs.rs/sphur/latest/sphur/struct.Sphur.html) docs for usga
 use sphur::Sphur;
 
 fn main() {
-   // auto seed state w/ platform entropy
-   let mut rng = Sphur::new();
-
-   // Generate prng's
-   let x128: u128 = rng.gen_u128();
-   let x64: u64 = rng.gen_u64();
-   let x32: u32 = rng.gen_u32();
-   let flag: bool = rng.gen_bool();
-
-   let bounded = rng.gen_range(10..20);
-   assert!(bounded >= 10 && bounded < 20);
-
-   // Reproducible streams with a custom seed
-   let mut rng1 = Sphur::new_seeded(12345);
-   let mut rng2 = Sphur::new_seeded(12345);
-
-   assert_eq!(rng1.gen_u64(), rng2.gen_u64());
-
-   // Bulk generation
-   let batch = rng.gen_batch();
-   assert_eq!(batch.len(), 32);
+    // auto seed state w/ platform entropy
+    let mut rng = Sphur::new();
+    
+    // Generate prng's
+    let u64_val: u64 = rng.gen_u64();
+    assert!(u64_val >= 0);
+    
+    let u32_val: u32 = rng.gen_u32();
+    assert!(u32_val >= 0);
+    
+    let ranged_val: u64 = rng.gen_range(10..100);
+    assert!(ranged_val >= 10);
+    
+    let flag: bool = rng.gen_bool();
+    assert!(flag == true || flag == false);
+    
+    let bounded = rng.gen_range(10..20);
+    assert!(bounded >= 10 && bounded < 20);
+    
+    // Reproducible streams with a custom seed
+    let mut rng1 = Sphur::new_seeded(12345);
+    let mut rng2 = Sphur::new_seeded(12345);
+    assert_eq!(rng1.gen_u64(), rng2.gen_u64());
+    
+    // Bulk generation
+    let batch = rng.gen_batch();
+    assert_eq!(batch.len(), 32);
 }
 ```
 
