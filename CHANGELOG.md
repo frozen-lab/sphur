@@ -1,3 +1,9 @@
+### V-0.2.0
+
+- Update internal state structure `[u128; 16]` -> `[u64; 32]`
+- Improved `gen_range` for both inclusive and exclusive range objects.
+- **Breaking**: `gen_u128` is no more available.
+
 ### V-0.1.3
 
 - Using median values in bench script
