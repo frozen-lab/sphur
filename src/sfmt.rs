@@ -57,3 +57,62 @@ impl InnerState {
         }
     }
 }
+
+pub(crate) struct Sfmt(pub(crate) InnerState);
+
+impl Sfmt {
+    #[inline(always)]
+    pub(crate) fn new_seeded(seed: u64) -> Self {
+        Self(InnerState::new(seed))
+    }
+
+    #[inline(always)]
+    pub(crate) fn new() -> Self {
+        let seed = unsafe { platform_seed() };
+        Self(InnerState::new(seed))
+    }
+}
+
+/// Generate a custom seed w/ help of underlying hardware.
+#[inline(always)]
+unsafe fn platform_seed() -> u64 {
+    // NOTE: On x86_64, the `rdtsc` is reliable and generally available in all three OS.
+    // It's fast as it avoids syscall overhead.
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        use std::arch::asm;
+
+        let mut lo: u32;
+        let mut hi: u32;
+
+        asm!("rdtsc", out("eax") lo, out("edx") hi);
+
+        ((hi as u64) << 32) | (lo as u64)
+    }
+
+    // NOTE: On aarch64, we read the virtual counter `cntvct`. It provides high-res
+    // monotonic value w/o syscall overhead.
+    #[cfg(target_arch = "aarch64")]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "ios"))]
+    unsafe {
+        use std::arch::asm;
+
+        let cnt: u64;
+        asm!("mrs {0}, cntvct_el0", out(reg) cnt);
+
+        cnt
+    }
+
+    // WARN: On Win-Aarch64, as usual, `cntvct` is not available (deemed as illegal instructions)
+    // So using the `SysTime` is only viable option
+    #[cfg(target_arch = "aarch64")]
+    #[cfg(target_os = "windows")]
+    {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards");
+
+        // Combine seconds and nanoseconds into a u64
+        ((now.as_secs() as u64) << 32) ^ (now.subsec_nanos() as u64)
+    }
+}
