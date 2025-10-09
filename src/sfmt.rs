@@ -116,3 +116,87 @@ unsafe fn platform_seed() -> u64 {
         ((now.as_secs() as u64) << 32) ^ (now.subsec_nanos() as u64)
     }
 }
+
+#[cfg(test)]
+mod sfmt_tests {
+    use super::*;
+
+    mod sfmt {
+        use super::*;
+
+        #[test]
+        fn test_sfmt_init_with_platform_seed_works() {
+            let sfmt = Sfmt::new();
+
+            assert!(
+                sfmt.0 .0.iter().any(|&x| x != 0),
+                "innerState slice must contain non-zero values"
+            );
+        }
+
+        #[test]
+        fn test_sfmt_init_with_custom_seed_works() {
+            let sfmt = Sfmt::new_seeded(0x123456789);
+
+            assert!(
+                sfmt.0 .0.iter().any(|&x| x != 0),
+                "innerState slice must contain non-zero values"
+            );
+        }
+    }
+
+    mod inner_state {
+        use super::*;
+
+        #[test]
+        fn test_same_seeds_creates_same_states() {
+            let s1 = InnerState::new(0x123456789);
+            let s2 = InnerState::new(0x123456789);
+
+            assert_eq!(s1.0, s2.0, "same seeds should create same states");
+        }
+
+        #[test]
+        fn test_diff_seeds_creates_diff_states() {
+            let s1 = InnerState::new(0x123456789);
+            let s2 = InnerState::new(0x987654321);
+
+            assert_ne!(s1.0, s2.0, "different seeds should create different states");
+        }
+
+        #[test]
+        fn test_period_cert_has_odd_parity() {
+            let mut s = InnerState::new(0xDEADBEEFCAFEBABE);
+
+            let x = s.0[0] ^ s.0[1] ^ s.0[2] ^ s.0[3];
+            let mut parity = 0u32;
+
+            for i in 0..4 {
+                parity ^= x & PARITY[i];
+            }
+
+            assert_eq!(
+                parity.count_ones() % 2,
+                1,
+                "period_cert must produce an odd parity"
+            );
+        }
+    }
+
+    mod platform_seed_generation {
+        use super::*;
+
+        #[test]
+        fn test_platform_seed_runtime_sanity() {
+            let s1 = unsafe { platform_seed() };
+
+            // NOTE: custom delay (for just in case)
+            std::thread::sleep(std::time::Duration::from_millis(1));
+
+            let s2 = unsafe { platform_seed() };
+
+            assert_ne!(s1, s2, "platform_seed should produce different values");
+            assert!(s1 != 0 && s2 != 0, "seed values must be non-zero");
+        }
+    }
+}
