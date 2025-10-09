@@ -17,9 +17,7 @@ impl InnerState {
         for i in 2..STATE32_LEN {
             let prev = s[i - 1];
 
-            s[i] = 1812433253u32
-                .wrapping_mul(prev ^ (prev >> 30))
-                .wrapping_add(i as u32);
+            s[i] = 1812433253u32.wrapping_mul(prev ^ (prev >> 30)).wrapping_add(i as u32);
         }
 
         // NOTE: period certification to ensure full period
@@ -118,7 +116,7 @@ unsafe fn platform_seed() -> u64 {
 }
 
 #[cfg(test)]
-mod sfmt_tests {
+mod tests {
     use super::*;
 
     mod sfmt {
@@ -175,11 +173,7 @@ mod sfmt_tests {
                 parity ^= x & PARITY[i];
             }
 
-            assert_eq!(
-                parity.count_ones() % 2,
-                1,
-                "period_cert must produce an odd parity"
-            );
+            assert_eq!(parity.count_ones() % 2, 1, "period_cert must produce an odd parity");
         }
     }
 
