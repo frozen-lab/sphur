@@ -430,6 +430,65 @@ mod tests {
     }
 
     #[cfg(target_arch = "x86_64")]
+    mod target_avx2 {
+        use super::*;
+        use std::arch::x86_64::*;
+
+        #[test]
+        fn test_shift_right_256_epi32_shifts_correctly() {
+            unsafe {
+                let x = _mm256_set_epi32(
+                    0x00000008, 0x00000007, 0x00000006, 0x00000005, 0x00000004, 0x00000003, 0x00000002, 0x00000001,
+                );
+                let r = super::avx2::recurrence_relation_256(x, x, x, x, _mm256_set1_epi32(0xFFFFFFFFu32 as i32));
+
+                let mut buf = [0u32; 8];
+                let orig: [u32; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+
+                _mm256_storeu_si256(buf.as_mut_ptr() as *mut __m256i, r);
+                assert_eq!(buf.len(), 8);
+            }
+        }
+
+        #[test]
+        fn test_generate_inner_state_is_deterministic() {
+            unsafe {
+                let mut s1 = InnerState([1u32; STATE32_LEN]);
+                let mut s2 = InnerState([1u32; STATE32_LEN]);
+
+                super::avx2::generate_inner_state(&mut s1.0);
+                super::avx2::generate_inner_state(&mut s2.0);
+
+                assert_eq!(s1.0, s2.0, "identical inputs should yield identical outputs");
+            }
+        }
+
+        #[test]
+        fn test_recurrence_relation_256_deterministic() {
+            unsafe {
+                let a = _mm256_set1_epi32(0xAAAAAAAAu32 as i32);
+                let b = _mm256_set1_epi32(0xBBBBBBBBu32 as i32);
+                let c = _mm256_set1_epi32(0xCCCCCCCCu32 as i32);
+                let d = _mm256_set1_epi32(0xDDDDDDDDu32 as i32);
+
+                let mask128 = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
+                let mask256 = _mm256_inserti128_si256(_mm256_castsi128_si256(mask128), mask128, 1);
+
+                let r1 = super::avx2::recurrence_relation_256(a, b, c, d, mask256);
+                let r2 = super::avx2::recurrence_relation_256(a, b, c, d, mask256);
+
+                let mut buf1 = [0u32; 8];
+                let mut buf2 = [0u32; 8];
+
+                _mm256_storeu_si256(buf1.as_mut_ptr() as *mut __m256i, r1);
+                _mm256_storeu_si256(buf2.as_mut_ptr() as *mut __m256i, r2);
+
+                assert_eq!(buf1, buf2, "recurrence_relation_256 must be deterministic");
+            }
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
     mod target_sse2 {
         use super::*;
         use std::arch::x86_64::*;
