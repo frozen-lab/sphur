@@ -73,15 +73,118 @@ impl ISA {
 }
 
 #[cfg(target_arch = "x86_64")]
+mod avx2 {
+    use super::*;
+    use std::arch::x86_64::*;
+
+    const VEC256_COUNT: usize = N128 / 2;
+    const U32S_PER_256: usize = 8;
+    const U32S_PER_128: usize = 4;
+
+    #[target_feature(enable = "avx2")]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    pub(crate) unsafe fn generate_inner_state(state: &mut [u32; STATE32_LEN]) {
+        let mask128 = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
+        let mask256 = _mm256_inserti128_si256(_mm256_castsi128_si256(mask128), mask128, 1);
+
+        for v in 0..VEC256_COUNT {
+            let i128 = v * 2;
+
+            let ji = i128 + POS1;
+            let b_idx128 = if ji >= N128 { ji - N128 } else { ji };
+
+            let ci = i128 + N128 - 2;
+            let c_idx128 = if ci >= N128 { ci - N128 } else { ci };
+
+            let di = i128 + N128 - 1;
+            let d_idx128 = if di >= N128 { di - N128 } else { di };
+
+            let a = load256_from_128_chunks(state.as_ptr(), i128);
+            let b = load256_from_128_chunks(state.as_ptr(), b_idx128);
+            let c = load256_from_128_chunks(state.as_ptr(), c_idx128);
+            let d = load256_from_128_chunks(state.as_ptr(), d_idx128);
+
+            let rr = recurrence_relation_256(a, b, c, d, mask256);
+            store256_to_128_chunks(state.as_mut_ptr(), i128, rr);
+        }
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    pub(crate) unsafe fn load256_from_128_chunks(src: *const u32, idx128: usize) -> __m256i {
+        let high_idx = if idx128 + 1 >= N128 {
+            idx128 + 1 - N128
+        } else {
+            idx128 + 1
+        };
+
+        let low_ptr = src.add(idx128 * U32S_PER_128) as *const __m128i;
+        let lo = _mm_load_si128(low_ptr);
+
+        let high_ptr = src.add(high_idx * U32S_PER_128) as *const __m128i;
+        let hi = _mm_load_si128(high_ptr);
+
+        _mm256_inserti128_si256(_mm256_castsi128_si256(lo), hi, 1)
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    pub(crate) unsafe fn store256_to_128_chunks(dst: *mut u32, idx128: usize, v: __m256i) {
+        let lo = _mm256_castsi256_si128(v);
+        let hi = _mm256_extracti128_si256(v, 1);
+
+        let high_idx = if idx128 + 1 >= N128 {
+            idx128 + 1 - N128
+        } else {
+            idx128 + 1
+        };
+
+        let low_ptr = dst.add(idx128 * U32S_PER_128) as *mut __m128i;
+        _mm_store_si128(low_ptr, lo);
+
+        let high_ptr = dst.add(high_idx * U32S_PER_128) as *mut __m128i;
+        _mm_store_si128(high_ptr, hi);
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    pub(crate) unsafe fn recurrence_relation_256(
+        a: __m256i,
+        b: __m256i,
+        c: __m256i,
+        d: __m256i,
+        mask256: __m256i,
+    ) -> __m256i {
+        let a_lo = _mm256_castsi256_si128(a);
+        let a_hi = _mm256_extracti128_si256(a, 1);
+
+        let b_lo = _mm256_castsi256_si128(b);
+        let b_hi = _mm256_extracti128_si256(b, 1);
+
+        let c_lo = _mm256_castsi256_si128(c);
+        let c_hi = _mm256_extracti128_si256(c, 1);
+
+        let d_lo = _mm256_castsi256_si128(d);
+        let d_hi = _mm256_extracti128_si256(d, 1);
+
+        let r_lo = super::sse2::recurrence_relation(a_lo, b_lo, c_lo, d_lo, _mm256_castsi256_si128(mask256));
+        let r_hi = super::sse2::recurrence_relation(a_hi, b_hi, c_hi, d_hi, _mm256_extracti128_si256(mask256, 1));
+
+        _mm256_inserti128_si256(_mm256_castsi128_si256(r_lo), r_hi, 1)
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
 mod sse2 {
     use super::*;
     use std::arch::x86_64::*;
 
+    // 4 u32 per SIMD lane
+    const MULT: usize = 4;
+
     #[target_feature(enable = "sse2")]
     #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn generate_inner_state(state: &mut [u32; STATE32_LEN]) {
-        // 4 u32 per vector
-        const MULT: usize = 4;
         let mask = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
 
         for i in 0..N128 {
@@ -162,11 +265,12 @@ mod neon {
     use super::*;
     use core::arch::aarch64::*;
 
+    // 4 u32 per SIMD lane
+    const MULT: usize = 4;
+
     #[target_feature(enable = "neon")]
     #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn generate_inner_state(state: &mut [u32; STATE32_LEN]) {
-        // 4 u32 per vector
-        const MULT: usize = 4;
         let mask = vld1q_u32(MSK.as_ptr());
 
         for i in 0..N128 {
