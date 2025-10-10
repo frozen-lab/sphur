@@ -22,12 +22,12 @@ impl Simd {
     #[inline(always)]
     pub(crate) fn gen_state(&self, state: &mut InnerState) {
         match self.0 {
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
             ISA::AVX2 => unsafe {
                 avx2::generate_inner_state(&mut state.0);
             },
 
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
             ISA::SSE2 => unsafe {
                 sse2::generate_inner_state(&mut state.0);
             },
@@ -72,7 +72,7 @@ impl ISA {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64"))]
 mod avx2 {
     use super::*;
     use std::arch::x86_64::*;
@@ -147,7 +147,13 @@ mod avx2 {
 
     #[target_feature(enable = "avx2")]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn recurrence_relation_256(a: __m256i, b: __m256i, c: __m256i, d: __m256i, mask256: __m256i) -> __m256i {
+    pub(crate) unsafe fn recurrence_relation_256(
+        a: __m256i,
+        b: __m256i,
+        c: __m256i,
+        d: __m256i,
+        mask256: __m256i,
+    ) -> __m256i {
         // x = a << SL1 (per-lane)
         let x = _mm256_slli_epi32(a, SL1 as i32);
 
@@ -172,7 +178,7 @@ mod avx2 {
 
     #[target_feature(enable = "avx2")]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn shift_left_256_epi32(x: __m256i) -> __m256i {
+    pub(crate) unsafe fn shift_left_256_epi32(x: __m256i) -> __m256i {
         let tmp = _mm256_slli_si256(x, 4);
         let x1 = _mm256_slli_epi32(x, SL1 as i32);
         let x2 = _mm256_srli_epi32(tmp, (32 - SL1) as i32);
@@ -182,7 +188,7 @@ mod avx2 {
 
     #[target_feature(enable = "avx2")]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn shift_right_256_epi32(x: __m256i) -> __m256i {
+    pub(crate) unsafe fn shift_right_256_epi32(x: __m256i) -> __m256i {
         let tmp = _mm256_srli_si256(x, 4);
         let x1 = _mm256_srli_epi32(x, SR1 as i32);
         let x2 = _mm256_slli_epi32(tmp, (32 - SR1) as i32);
@@ -192,7 +198,7 @@ mod avx2 {
 
     #[target_feature(enable = "avx2")]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn load256_from_128_chunks(src: *const u32, idx128: usize) -> __m256i {
+    pub(crate) unsafe fn load256_from_128_chunks(src: *const u32, idx128: usize) -> __m256i {
         let u32_idx = idx128 * U32S_PER_128;
 
         // NOTE: if both 128 blocks are contiguous we can use this fast path
@@ -209,7 +215,7 @@ mod avx2 {
 
     #[target_feature(enable = "avx2")]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn store256_to_128_chunks(dst: *mut u32, idx128: usize, v: __m256i) {
+    pub(crate) unsafe fn store256_to_128_chunks(dst: *mut u32, idx128: usize, v: __m256i) {
         let u32_idx = idx128 * U32S_PER_128;
 
         // NOTE: if both 128 blocks are contiguous we can use this fast path
@@ -489,6 +495,107 @@ mod tests {
         }
     }
 
+    #[cfg(all(target_arch = "x86_64"))]
+    mod target_avx2 {
+        use super::*;
+        use std::arch::x86_64::*;
+        use std::mem;
+
+        #[inline(always)]
+        #[allow(unsafe_op_in_unsafe_fn)]
+        unsafe fn loadu256(v: &[u32; 8]) -> __m256i {
+            _mm256_loadu_si256(v.as_ptr() as *const __m256i)
+        }
+
+        #[inline(always)]
+        #[allow(unsafe_op_in_unsafe_fn)]
+        unsafe fn storeu256(v: __m256i) -> [u32; 8] {
+            let mut out = mem::MaybeUninit::<[u32; 8]>::uninit();
+            _mm256_storeu_si256(out.as_mut_ptr() as *mut __m256i, v);
+
+            out.assume_init()
+        }
+
+        #[test]
+        fn test_shift_right_256_epi32_shifts_correctly() {
+            unsafe {
+                let input = [1, 2, 3, 4, 5, 6, 7, 8];
+                let x = loadu256(&input);
+                let r = avx2::shift_right_256_epi32(x);
+                let result = storeu256(r);
+
+                assert!(result.iter().zip(input).all(|(&r, i)| r <= i));
+            }
+        }
+
+        #[test]
+        fn test_shift_left_256_epi32_shifts_correctly() {
+            unsafe {
+                let input = [1, 2, 3, 4, 5, 6, 7, 8];
+                let x = loadu256(&input);
+                let r = avx2::shift_left_256_epi32(x);
+                let result = storeu256(r);
+
+                assert!(result.iter().zip(input).all(|(&r, i)| r >= i));
+            }
+        }
+
+        #[test]
+        fn test_recurrence_relation_256_deterministic() {
+            unsafe {
+                let a = _mm256_set1_epi32(0x11111111);
+                let b = _mm256_set1_epi32(0x22222222);
+                let c = _mm256_set1_epi32(0x33333333);
+                let d = _mm256_set1_epi32(0x44444444);
+                let mask = _mm256_set1_epi32(0xdeadbeefu32 as i32);
+
+                let r1 = avx2::recurrence_relation_256(a, b, c, d, mask);
+                let r2 = avx2::recurrence_relation_256(a, b, c, d, mask);
+
+                let o1 = storeu256(r1);
+                let o2 = storeu256(r2);
+
+                assert_eq!(o1, o2, "recurrence must be deterministic");
+            }
+        }
+
+        #[test]
+        fn test_generate_inner_state_changes_state() {
+            let mut state = [0xabcdef01u32; STATE32_LEN];
+            let prev = state;
+
+            unsafe { avx2::generate_inner_state(&mut state) };
+
+            assert_ne!(state, prev, "state must be mutated after generation");
+        }
+
+        #[test]
+        fn test_generate_inner_state_deterministic() {
+            let mut s1 = [0x55555555u32; STATE32_LEN];
+            let mut s2 = s1.clone();
+
+            unsafe {
+                avx2::generate_inner_state(&mut s1);
+                avx2::generate_inner_state(&mut s2);
+            }
+
+            assert_eq!(s1, s2, "identical input -> identical output");
+        }
+
+        #[test]
+        fn test_avx2_vs_sse2_equivalence() {
+            let mut s_avx = [0x99999999u32; STATE32_LEN];
+            let mut s_sse = s_avx.clone();
+
+            unsafe {
+                avx2::generate_inner_state(&mut s_avx);
+                sse2::generate_inner_state(&mut s_sse);
+            }
+
+            assert_eq!(&s_avx[..64], &s_sse[..64]);
+        }
+    }
+
     #[cfg(target_arch = "x86_64")]
     mod target_sse2 {
         use super::*;
@@ -501,7 +608,7 @@ mod tests {
                 let orig: [u32; 4] = [1, 2, 3, 4];
 
                 let x = _mm_set_epi32(0x00000004, 0x00000003, 0x00000002, 0x00000001);
-                let r = super::sse2::shift_right_128_epi32(x);
+                let r = sse2::shift_right_128_epi32(x);
 
                 _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
 
@@ -526,7 +633,7 @@ mod tests {
         fn test_shift_left_128_epi32_shifts_correctly() {
             unsafe {
                 let x = _mm_set_epi32(1, 2, 3, 4);
-                let r = super::sse2::shift_left_128_epi32(x);
+                let r = sse2::shift_left_128_epi32(x);
 
                 let mut buf = [0u32; 4];
                 _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
@@ -544,8 +651,8 @@ mod tests {
                 let d = _mm_set1_epi32(0xDDDDDDDDu32 as i32);
                 let mask = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
 
-                let r1 = super::sse2::recurrence_relation(a, b, c, d, mask);
-                let r2 = super::sse2::recurrence_relation(a, b, c, d, mask);
+                let r1 = sse2::recurrence_relation(a, b, c, d, mask);
+                let r2 = sse2::recurrence_relation(a, b, c, d, mask);
 
                 let mut buf1 = [0u32; 4];
                 let mut buf2 = [0u32; 4];
@@ -563,8 +670,8 @@ mod tests {
                 let mut s1 = InnerState([1u32; STATE32_LEN]);
                 let mut s2 = InnerState([1u32; STATE32_LEN]);
 
-                super::sse2::generate_inner_state(&mut s1.0);
-                super::sse2::generate_inner_state(&mut s2.0);
+                sse2::generate_inner_state(&mut s1.0);
+                sse2::generate_inner_state(&mut s2.0);
 
                 assert_eq!(s1.0, s2.0, "identical inputs should yield identical outputs");
             }
@@ -581,7 +688,7 @@ mod tests {
             unsafe {
                 let orig: [u32; 4] = [1, 2, 3, 4];
                 let x = vld1q_u32(orig.as_ptr());
-                let r = super::neon::shift_right_128_epi32(x);
+                let r = neon::shift_right_128_epi32(x);
 
                 let mut buf = [0u32; 4];
                 vst1q_u32(buf.as_mut_ptr(), r);
@@ -608,7 +715,7 @@ mod tests {
             unsafe {
                 let orig = [1u32, 2, 3, 4];
                 let x = vld1q_u32(orig.as_ptr());
-                let r = super::neon::shift_left_128_epi32(x);
+                let r = neon::shift_left_128_epi32(x);
 
                 let mut buf = [0u32; 4];
                 vst1q_u32(buf.as_mut_ptr(), r);
@@ -626,8 +733,8 @@ mod tests {
                 let d = vdupq_n_u32(0xDDDDDDDD);
                 let mask = vld1q_u32(MSK.as_ptr());
 
-                let r1 = super::neon::recurrence_relation(a, b, c, d, mask);
-                let r2 = super::neon::recurrence_relation(a, b, c, d, mask);
+                let r1 = neon::recurrence_relation(a, b, c, d, mask);
+                let r2 = neon::recurrence_relation(a, b, c, d, mask);
 
                 let mut buf1 = [0u32; 4];
                 let mut buf2 = [0u32; 4];
@@ -644,8 +751,8 @@ mod tests {
                 let mut s1 = InnerState([1u32; STATE32_LEN]);
                 let mut s2 = InnerState([1u32; STATE32_LEN]);
 
-                super::neon::generate_inner_state(&mut s1.0);
-                super::neon::generate_inner_state(&mut s2.0);
+                neon::generate_inner_state(&mut s1.0);
+                neon::generate_inner_state(&mut s2.0);
 
                 assert_eq!(s1.0, s2.0, "identical inputs should yield identical outputs");
             }
