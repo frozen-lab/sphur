@@ -22,8 +22,19 @@ impl Simd {
     #[inline(always)]
     pub(crate) fn gen_state(&self, state: &mut InnerState) {
         match self.0 {
-            ISA::AVX2 | ISA::SSE2 => unsafe {
+            #[cfg(target_arch = "x86_64")]
+            ISA::AVX2 => unsafe {
                 sse2::generate_inner_state(&mut state.0);
+            },
+
+            #[cfg(target_arch = "x86_64")]
+            ISA::SSE2 => unsafe {
+                sse2::generate_inner_state(&mut state.0);
+            },
+
+            #[cfg(target_arch = "aarch64")]
+            ISA::NEON => unsafe {
+                neon::generate_inner_state(&mut state.0);
             },
             _ => unimplemented!(),
         }
@@ -66,55 +77,57 @@ mod sse2 {
     use super::*;
     use std::arch::x86_64::*;
 
+    #[target_feature(enable = "sse2")]
+    #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn generate_inner_state(state: &mut [u32; STATE32_LEN]) {
-        unsafe {
-            // 4 u32 per vector
-            const MULT: usize = 4;
-            let mask = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
+        // 4 u32 per vector
+        const MULT: usize = 4;
+        let mask = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
 
-            for i in 0..N128 {
-                let ji = i + POS1;
-                let b_idx = if ji >= N128 { ji - N128 } else { ji };
+        for i in 0..N128 {
+            let ji = i + POS1;
+            let b_idx = if ji >= N128 { ji - N128 } else { ji };
 
-                let ci = i + N128 - 2;
-                let c_idx = if ci >= N128 { ci - N128 } else { ci };
+            let ci = i + N128 - 2;
+            let c_idx = if ci >= N128 { ci - N128 } else { ci };
 
-                let di = i + N128 - 1;
-                let d_idx = if di >= N128 { di - N128 } else { di };
+            let di = i + N128 - 1;
+            let d_idx = if di >= N128 { di - N128 } else { di };
 
-                let a = _mm_load_si128(state.as_ptr().add(i * MULT) as *const __m128i);
-                let b = _mm_load_si128(state.as_ptr().add(b_idx * MULT) as *const __m128i);
-                let c = _mm_load_si128(state.as_ptr().add(c_idx * MULT) as *const __m128i);
-                let d = _mm_load_si128(state.as_ptr().add(d_idx * MULT) as *const __m128i);
+            let a = _mm_load_si128(state.as_ptr().add(i * MULT) as *const __m128i);
+            let b = _mm_load_si128(state.as_ptr().add(b_idx * MULT) as *const __m128i);
+            let c = _mm_load_si128(state.as_ptr().add(c_idx * MULT) as *const __m128i);
+            let d = _mm_load_si128(state.as_ptr().add(d_idx * MULT) as *const __m128i);
 
-                let rr = recurrence_relation(a, b, c, d, mask);
-                _mm_store_si128(state.as_mut_ptr().add(i * MULT) as *mut __m128i, rr);
-            }
+            let rr = recurrence_relation(a, b, c, d, mask);
+            _mm_store_si128(state.as_mut_ptr().add(i * MULT) as *mut __m128i, rr);
         }
     }
 
+    #[target_feature(enable = "sse2")]
+    #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i, mask: __m128i) -> __m128i {
-        unsafe {
-            // x = a << SL1
-            let x = _mm_slli_epi32(a, SL1 as i32);
+        // x = a << SL1
+        let x = _mm_slli_epi32(a, SL1 as i32);
 
-            // y = `b >> SR1 & mask`
-            let y = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), mask);
+        // y = `b >> SR1 & mask`
+        let y = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), mask);
 
-            let c_sr2 = shift_right_128_epi32(c);
-            let d_sl2 = shift_left_128_epi32(d);
+        let c_sr2 = shift_right_128_epi32(c);
+        let d_sl2 = shift_left_128_epi32(d);
 
-            // r = a ^ x ^ y ^ c_sr2 ^ d_sl2
-            let mut r = _mm_xor_si128(a, x);
+        // r = a ^ x ^ y ^ c_sr2 ^ d_sl2
+        let mut r = _mm_xor_si128(a, x);
 
-            r = _mm_xor_si128(r, y);
-            r = _mm_xor_si128(r, c_sr2);
-            r = _mm_xor_si128(r, d_sl2);
+        r = _mm_xor_si128(r, y);
+        r = _mm_xor_si128(r, c_sr2);
+        r = _mm_xor_si128(r, d_sl2);
 
-            r
-        }
+        r
     }
 
+    #[target_feature(enable = "sse2")]
+    #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn shift_right_128_epi32(x: __m128i) -> __m128i {
         const SR1_I32: i32 = SR1 as i32;
 
@@ -122,14 +135,14 @@ mod sse2 {
             return x;
         }
 
-        unsafe {
-            let x1 = _mm_srli_epi32(x, SR1_I32);
-            let x2 = _mm_slli_epi32(_mm_srli_si128(x, 4), 32 - SR1_I32);
+        let x1 = _mm_srli_epi32(x, SR1_I32);
+        let x2 = _mm_slli_epi32(_mm_srli_si128(x, 4), 32 - SR1_I32);
 
-            _mm_or_si128(x1, x2)
-        }
+        _mm_or_si128(x1, x2)
     }
 
+    #[target_feature(enable = "sse2")]
+    #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn shift_left_128_epi32(x: __m128i) -> __m128i {
         const SL1_I32: i32 = SL1 as i32;
 
@@ -137,12 +150,10 @@ mod sse2 {
             return x;
         }
 
-        unsafe {
-            let x1 = _mm_slli_epi32(x, SL1_I32);
-            let x2 = _mm_srli_epi32(_mm_slli_si128(x, 4), 32 - SL1_I32);
+        let x1 = _mm_slli_epi32(x, SL1_I32);
+        let x2 = _mm_srli_epi32(_mm_slli_si128(x, 4), 32 - SL1_I32);
 
-            _mm_or_si128(x1, x2)
-        }
+        _mm_or_si128(x1, x2)
     }
 }
 
@@ -151,6 +162,8 @@ mod neon {
     use super::*;
     use core::arch::aarch64::*;
 
+    #[target_feature(enable = "neon")]
+    #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn generate_inner_state(state: &mut [u32; STATE32_LEN]) {
         // 4 u32 per vector
         const MULT: usize = 4;
@@ -176,7 +189,8 @@ mod neon {
         }
     }
 
-    #[inline(always)]
+    #[target_feature(enable = "neon")]
+    #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn recurrence_relation(
         a: uint32x4_t,
         b: uint32x4_t,
@@ -186,20 +200,24 @@ mod neon {
     ) -> uint32x4_t {
         let x = shift_left_128_epi32(a);
         let y = vandq_u32(shift_right_128_epi32(b), mask);
+
         let c_sr2 = shift_right_128_epi32(c);
         let d_sl2 = shift_left_128_epi32(d);
 
         let mut r = veorq_u32(a, x);
+
         r = veorq_u32(r, y);
         r = veorq_u32(r, c_sr2);
         r = veorq_u32(r, d_sl2);
+
         r
     }
 
-    #[inline(always)]
+    #[target_feature(enable = "neon")]
+    #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn shift_right_128_epi32(x: uint32x4_t) -> uint32x4_t {
         let xb = vreinterpretq_u8_u32(x);
-        let ext = vextq_u8(xb, xb, 4); // shift lanes right by 32 bits
+        let ext = vextq_u8(xb, xb, 4);
         let ext_u32 = vreinterpretq_u32_u8(ext);
 
         let x1 = vshrq_n_u32(x, SR1 as i32);
@@ -208,10 +226,11 @@ mod neon {
         vorrq_u32(x1, x2)
     }
 
-    #[inline(always)]
+    #[target_feature(enable = "neon")]
+    #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn shift_left_128_epi32(x: uint32x4_t) -> uint32x4_t {
         let xb = vreinterpretq_u8_u32(x);
-        let ext = vextq_u8(xb, xb, 12); // shift lanes left by 32 bits
+        let ext = vextq_u8(xb, xb, 12);
         let ext_u32 = vreinterpretq_u32_u8(ext);
 
         let x1 = vshlq_n_u32(x, SL1 as i32);
