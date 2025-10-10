@@ -217,7 +217,8 @@ mod neon {
     #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn shift_right_128_epi32(x: uint32x4_t) -> uint32x4_t {
         let xb = vreinterpretq_u8_u32(x);
-        let ext = vextq_u8(xb, xb, 4);
+        let zeros = vdupq_n_u8(0);
+        let ext = vextq_u8(xb, zeros, 4);
         let ext_u32 = vreinterpretq_u32_u8(ext);
 
         let x1 = vshrq_n_u32(x, SR1 as i32);
@@ -230,7 +231,8 @@ mod neon {
     #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn shift_left_128_epi32(x: uint32x4_t) -> uint32x4_t {
         let xb = vreinterpretq_u8_u32(x);
-        let ext = vextq_u8(xb, xb, 12);
+        let zeros = vdupq_n_u8(0);
+        let ext = vextq_u8(xb, zeros, 12);
         let ext_u32 = vreinterpretq_u32_u8(ext);
 
         let x1 = vshlq_n_u32(x, SL1 as i32);
