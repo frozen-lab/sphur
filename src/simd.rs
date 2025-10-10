@@ -1,3 +1,35 @@
+use crate::sfmt::InnerState;
+
+pub(crate) const N128: usize = 156;
+pub(crate) const STATE32_LEN: usize = N128 * 4;
+pub(crate) const PARITY: [u32; 4] = [0x00000001, 0x00000000, 0x00000000, 0x13c9e684];
+
+const MSK: [u32; 4] = [0xdfffffefu32, 0xddfecb7fu32, 0xbffaffffu32, 0xbffffff6u32];
+const POS1: usize = 122;
+const SL1: usize = 18;
+const SL2: usize = 1;
+const SR1: usize = 11;
+const SR2: usize = 1;
+
+pub(crate) struct Simd(ISA);
+
+impl Simd {
+    #[inline(always)]
+    pub(crate) fn new() -> Self {
+        Self(ISA::detect_isa())
+    }
+
+    #[inline(always)]
+    pub(crate) fn gen_state(&self, state: &mut InnerState) {
+        match self.0 {
+            ISA::AVX2 | ISA::SSE2 => unsafe {
+                sse2::generate_inner_state(&mut state.0);
+            },
+            _ => unimplemented!(),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[allow(unused)]
 enum ISA {
@@ -29,6 +61,93 @@ impl ISA {
     }
 }
 
+#[cfg(target_arch = "x86_64")]
+mod sse2 {
+    use super::*;
+    use std::arch::x86_64::*;
+
+    pub(crate) unsafe fn generate_inner_state(state: &mut [u32; STATE32_LEN]) {
+        unsafe {
+            const MULT: usize = 4;
+            let mask = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
+
+            for i in 0..N128 {
+                let ji = i + POS1;
+                let b_idx = if ji >= N128 { ji - N128 } else { ji };
+
+                let ci = i + N128 - 2;
+                let c_idx = if ci >= N128 { ci - N128 } else { ci };
+
+                let di = i + N128 - 1;
+                let d_idx = if di >= N128 { di - N128 } else { di };
+
+                let a = _mm_load_si128(state.as_ptr().add(i * MULT) as *const __m128i);
+                let b = _mm_load_si128(state.as_ptr().add(b_idx * MULT) as *const __m128i);
+                let c = _mm_load_si128(state.as_ptr().add(c_idx * MULT) as *const __m128i);
+                let d = _mm_load_si128(state.as_ptr().add(d_idx * MULT) as *const __m128i);
+
+                let rr = recurrence_relation(a, b, c, d, mask);
+                _mm_store_si128(state.as_mut_ptr().add(i * MULT) as *mut __m128i, rr);
+            }
+        }
+    }
+
+    #[target_feature(enable = "sse2")]
+    unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i, mask: __m128i) -> __m128i {
+        unsafe {
+            // x = a << SL1
+            let x = _mm_slli_epi32(a, SL1 as i32);
+
+            // y = `b >> SR1 & mask`
+            let y = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), mask);
+
+            let c_sr2 = sr128_epi32(c);
+            let d_sl2 = sl128_epi32(d);
+
+            // r = a ^ x ^ y ^ c_sr2 ^ d_sl2
+            let mut r = _mm_xor_si128(a, x);
+
+            r = _mm_xor_si128(r, y);
+            r = _mm_xor_si128(r, c_sr2);
+            r = _mm_xor_si128(r, d_sl2);
+
+            r
+        }
+    }
+
+    #[target_feature(enable = "sse2")]
+    unsafe fn sr128_epi32(x: __m128i) -> __m128i {
+        const SR1_I32: i32 = SR1 as i32;
+
+        if SR1_I32 == 0 {
+            return x;
+        }
+
+        unsafe {
+            let x1 = _mm_srli_epi32(x, SR1_I32);
+            let x2 = _mm_slli_epi32(_mm_srli_si128(x, 4), 32 - SR1_I32);
+
+            _mm_or_si128(x1, x2)
+        }
+    }
+
+    #[target_feature(enable = "sse2")]
+    unsafe fn sl128_epi32(x: __m128i) -> __m128i {
+        const SL1_I32: i32 = SL1 as i32;
+
+        if SL1_I32 == 0 {
+            return x;
+        }
+
+        unsafe {
+            let x1 = _mm_slli_epi32(x, SL1_I32);
+            let x2 = _mm_srli_epi32(_mm_slli_si128(x, 4), 32 - SL1_I32);
+
+            _mm_or_si128(x1, x2)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -37,19 +156,32 @@ mod tests {
         use super::*;
 
         #[test]
+        fn test_isa_detection_in_simd_init() {
+            let simd = Simd::new();
+
+            match simd.0 {
+                #[cfg(target_arch = "x86_64")]
+                ISA::AVX2 | ISA::SSE2 => {}
+
+                #[cfg(target_arch = "aarch64")]
+                ISA::NEON => {}
+
+                _ => panic!("Unknown ISA detected for platform"),
+            }
+        }
+
+        #[test]
         fn test_perform_sanity_check_for_isa_detetion() {
             let isa = ISA::detect_isa();
 
-            #[cfg(target_arch = "x86_64")]
             match isa {
+                #[cfg(target_arch = "x86_64")]
                 ISA::AVX2 | ISA::SSE2 => {}
-                _ => panic!("Unknown ISA detected for x86_64"),
-            }
 
-            #[cfg(target_arch = "aarch64")]
-            match isa {
+                #[cfg(target_arch = "aarch64")]
                 ISA::NEON => {}
-                _ => panic!("Unknown ISA detected for aarch64"),
+
+                _ => panic!("Unknown ISA detected for platform"),
             }
         }
     }

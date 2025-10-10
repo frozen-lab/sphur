@@ -1,7 +1,4 @@
-const MEXP: usize = 19937;
-const N: usize = 156;
-const STATE32_LEN: usize = N * 4;
-const PARITY: [u32; 4] = [0x00000001, 0x00000000, 0x00000000, 0x13c9e684];
+use crate::simd::{PARITY, STATE32_LEN};
 
 #[repr(align(32))]
 pub(crate) struct InnerState(pub(crate) [u32; STATE32_LEN]);
