@@ -93,7 +93,7 @@ mod sse2 {
     }
 
     #[target_feature(enable = "sse2")]
-    unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i, mask: __m128i) -> __m128i {
+    pub(crate) unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i, mask: __m128i) -> __m128i {
         unsafe {
             // x = a << SL1
             let x = _mm_slli_epi32(a, SL1 as i32);
@@ -116,7 +116,7 @@ mod sse2 {
     }
 
     #[target_feature(enable = "sse2")]
-    unsafe fn sr128_epi32(x: __m128i) -> __m128i {
+    pub(crate) unsafe fn sr128_epi32(x: __m128i) -> __m128i {
         const SR1_I32: i32 = SR1 as i32;
 
         if SR1_I32 == 0 {
@@ -132,7 +132,7 @@ mod sse2 {
     }
 
     #[target_feature(enable = "sse2")]
-    unsafe fn sl128_epi32(x: __m128i) -> __m128i {
+    pub(crate) unsafe fn sl128_epi32(x: __m128i) -> __m128i {
         const SL1_I32: i32 = SL1 as i32;
 
         if SL1_I32 == 0 {
@@ -182,6 +182,133 @@ mod tests {
                 ISA::NEON => {}
 
                 _ => panic!("Unknown ISA detected for platform"),
+            }
+        }
+    }
+
+    mod simd {
+        use super::*;
+        use crate::sfmt::InnerState;
+
+        #[test]
+        fn test_gen_state_mutates_current_state() {
+            let mut s = InnerState::new(0x123456789);
+
+            let simd = Simd::new();
+            let before = s.0;
+
+            simd.gen_state(&mut s);
+
+            assert_ne!(s.0, before, "gen_state should mutate the state");
+        }
+
+        #[test]
+        fn test_gen_state_produces_different_values_on_multiple_calls() {
+            let simd = Simd::new();
+
+            let mut s = InnerState::new(0xDEADBEEFCAFEBABE);
+            let first = s.0;
+
+            simd.gen_state(&mut s);
+            let second = s.0;
+
+            simd.gen_state(&mut s);
+            let third = s.0;
+
+            assert_ne!(first, second, "first refill should change state");
+            assert_ne!(second, third, "second refill should further change state");
+        }
+
+        #[test]
+        fn test_sfmt_refill_changes_state() {
+            let mut s = InnerState::new(0x12345678);
+            let original = s.0;
+            let simd = Simd::new();
+
+            simd.gen_state(&mut s);
+
+            assert_ne!(s.0, original, "SFMT refill must update the internal state");
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    mod target_sse2 {
+        use super::*;
+        use std::arch::x86_64::*;
+
+        #[test]
+        fn test_sr128_epi32_shifts_correctly() {
+            unsafe {
+                let mut buf = [0u32; 4];
+                let orig: [u32; 4] = [1, 2, 3, 4];
+
+                let x = _mm_set_epi32(0x00000004, 0x00000003, 0x00000002, 0x00000001);
+                let r = super::sse2::sr128_epi32(x);
+
+                _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
+
+                let shifted = ((u128::from(orig[3]) << 96)
+                    | (u128::from(orig[2]) << 64)
+                    | (u128::from(orig[1]) << 32)
+                    | u128::from(orig[0]))
+                    >> super::SR1;
+
+                let expected: [u32; 4] = [
+                    (shifted & 0xFFFF_FFFF) as u32,
+                    ((shifted >> 32) & 0xFFFF_FFFF) as u32,
+                    ((shifted >> 64) & 0xFFFF_FFFF) as u32,
+                    ((shifted >> 96) & 0xFFFF_FFFF) as u32,
+                ];
+
+                assert_eq!(buf, expected, "cross-lane right shift mismatch");
+            }
+        }
+
+        #[test]
+        fn test_sl128_epi32_shifts_correctly() {
+            unsafe {
+                let x = _mm_set_epi32(1, 2, 3, 4);
+                let r = super::sse2::sl128_epi32(x);
+
+                let mut buf = [0u32; 4];
+                _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
+
+                assert!(buf.iter().any(|&v| v > 4), "left shift should increase values");
+            }
+        }
+
+        #[test]
+        fn test_recurrence_relation_deterministic() {
+            unsafe {
+                let a = _mm_set1_epi32(0xAAAAAAAAu32 as i32);
+                let b = _mm_set1_epi32(0xBBBBBBBBu32 as i32);
+                let c = _mm_set1_epi32(0xCCCCCCCCu32 as i32);
+                let d = _mm_set1_epi32(0xDDDDDDDDu32 as i32);
+                let mask = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
+
+                let r1 = super::sse2::recurrence_relation(a, b, c, d, mask);
+                let r2 = super::sse2::recurrence_relation(a, b, c, d, mask);
+
+                let mut buf1 = [0u32; 4];
+                let mut buf2 = [0u32; 4];
+
+                _mm_storeu_si128(buf1.as_mut_ptr() as *mut __m128i, r1);
+                _mm_storeu_si128(buf2.as_mut_ptr() as *mut __m128i, r2);
+
+                assert_eq!(buf1, buf2, "recurrence_relation must be deterministic");
+            }
+        }
+
+        #[test]
+        fn test_generate_inner_state_is_deterministic() {
+            unsafe {
+                let mut s1 = InnerState([1u32; STATE32_LEN]);
+                let mut s2 = InnerState([1u32; STATE32_LEN]);
+
+                super::sse2::generate_inner_state(&mut s1.0);
+                super::sse2::generate_inner_state(&mut s2.0);
+
+                assert_eq!(s1.0, s2.0, "identical inputs should yield identical outputs");
             }
         }
     }
