@@ -176,6 +176,7 @@ mod neon {
         }
     }
 
+    #[inline(always)]
     pub(crate) unsafe fn recurrence_relation(
         a: uint32x4_t,
         b: uint32x4_t,
@@ -183,34 +184,22 @@ mod neon {
         d: uint32x4_t,
         mask: uint32x4_t,
     ) -> uint32x4_t {
-        // x = a << SL1
-        let x = sl128_epi32(a);
-
-        // y = (b >> SR1) & mask
-        let y = vandq_u32(sr128_epi32(b), mask);
-
+        let x = shift_left_128_epi32(a);
+        let y = vandq_u32(shift_right_128_epi32(b), mask);
         let c_sr2 = shift_right_128_epi32(c);
         let d_sl2 = shift_left_128_epi32(d);
 
-        // r = a ^ x ^ y ^ c_sr2 ^ d_sl2
         let mut r = veorq_u32(a, x);
-
         r = veorq_u32(r, y);
         r = veorq_u32(r, c_sr2);
         r = veorq_u32(r, d_sl2);
-
         r
     }
 
+    #[inline(always)]
     pub(crate) unsafe fn shift_right_128_epi32(x: uint32x4_t) -> uint32x4_t {
-        const SR1_U32: u32 = SR1 as u32;
-
-        if SR1_U32 == 0 {
-            return x;
-        }
-
         let xb = vreinterpretq_u8_u32(x);
-        let ext = vextq_u8(xb, xb, 4);
+        let ext = vextq_u8(xb, xb, 4); // shift lanes right by 32 bits
         let ext_u32 = vreinterpretq_u32_u8(ext);
 
         let x1 = vshrq_n_u32(x, SR1 as i32);
@@ -219,15 +208,10 @@ mod neon {
         vorrq_u32(x1, x2)
     }
 
+    #[inline(always)]
     pub(crate) unsafe fn shift_left_128_epi32(x: uint32x4_t) -> uint32x4_t {
-        const SL1_U32: u32 = SL1 as u32;
-
-        if SL1_U32 == 0 {
-            return x;
-        }
-
         let xb = vreinterpretq_u8_u32(x);
-        let ext = vextq_u8(xb, xb, 12);
+        let ext = vextq_u8(xb, xb, 12); // shift lanes left by 32 bits
         let ext_u32 = vreinterpretq_u32_u8(ext);
 
         let x1 = vshlq_n_u32(x, SL1 as i32);
@@ -410,13 +394,12 @@ mod tests {
         #[test]
         fn test_shift_right_128_epi32_shifts_correctly() {
             unsafe {
-                let mut buf = [0u32; 4];
                 let orig: [u32; 4] = [1, 2, 3, 4];
-
-                let x = _mm_set_epi32(0x00000004, 0x00000003, 0x00000002, 0x00000001);
+                let x = vld1q_u32(orig.as_ptr());
                 let r = super::neon::shift_right_128_epi32(x);
 
-                _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
+                let mut buf = [0u32; 4];
+                vst1q_u32(buf.as_mut_ptr(), r);
 
                 let shifted = ((u128::from(orig[3]) << 96)
                     | (u128::from(orig[2]) << 64)
@@ -438,11 +421,12 @@ mod tests {
         #[test]
         fn test_shift_left_128_epi32_shifts_correctly() {
             unsafe {
-                let x = _mm_set_epi32(1, 2, 3, 4);
+                let orig = [1u32, 2, 3, 4];
+                let x = vld1q_u32(orig.as_ptr());
                 let r = super::neon::shift_left_128_epi32(x);
 
                 let mut buf = [0u32; 4];
-                _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
+                vst1q_u32(buf.as_mut_ptr(), r);
 
                 assert!(buf.iter().any(|&v| v > 4), "left shift should increase values");
             }
@@ -451,20 +435,19 @@ mod tests {
         #[test]
         fn test_recurrence_relation_deterministic() {
             unsafe {
-                let a = _mm_set1_epi32(0xAAAAAAAAu32 as i32);
-                let b = _mm_set1_epi32(0xBBBBBBBBu32 as i32);
-                let c = _mm_set1_epi32(0xCCCCCCCCu32 as i32);
-                let d = _mm_set1_epi32(0xDDDDDDDDu32 as i32);
-                let mask = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
+                let a = vdupq_n_u32(0xAAAAAAAA);
+                let b = vdupq_n_u32(0xBBBBBBBB);
+                let c = vdupq_n_u32(0xCCCCCCCC);
+                let d = vdupq_n_u32(0xDDDDDDDD);
+                let mask = vld1q_u32(MSK.as_ptr());
 
                 let r1 = super::neon::recurrence_relation(a, b, c, d, mask);
                 let r2 = super::neon::recurrence_relation(a, b, c, d, mask);
 
                 let mut buf1 = [0u32; 4];
                 let mut buf2 = [0u32; 4];
-
-                _mm_storeu_si128(buf1.as_mut_ptr() as *mut __m128i, r1);
-                _mm_storeu_si128(buf2.as_mut_ptr() as *mut __m128i, r2);
+                vst1q_u32(buf1.as_mut_ptr(), r1);
+                vst1q_u32(buf2.as_mut_ptr(), r2);
 
                 assert_eq!(buf1, buf2, "recurrence_relation must be deterministic");
             }
