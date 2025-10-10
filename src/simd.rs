@@ -22,12 +22,12 @@ impl Simd {
     #[inline(always)]
     pub(crate) fn gen_state(&self, state: &mut InnerState) {
         match self.0 {
-            #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+            #[cfg(target_arch = "x86_64")]
             ISA::AVX2 => unsafe {
-                avx2::generate_inner_state(&mut state.0);
+                sse2::generate_inner_state(&mut state.0);
             },
 
-            #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+            #[cfg(target_arch = "x86_64")]
             ISA::SSE2 => unsafe {
                 sse2::generate_inner_state(&mut state.0);
             },
@@ -36,6 +36,7 @@ impl Simd {
             ISA::NEON => unsafe {
                 neon::generate_inner_state(&mut state.0);
             },
+
             _ => unimplemented!(),
         }
     }
@@ -69,168 +70,6 @@ impl ISA {
 
         #[cfg(target_arch = "aarch64")]
         return ISA::NEON;
-    }
-}
-
-#[cfg(all(target_arch = "x86_64"))]
-mod avx2 {
-    use super::*;
-    use std::arch::x86_64::*;
-
-    const U32S_PER_128: usize = 4;
-    const U32S_PER_256: usize = 8;
-
-    #[target_feature(enable = "avx2")]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    pub(crate) unsafe fn generate_inner_state(state: &mut [u32; STATE32_LEN]) {
-        // sanity check
-        debug_assert_eq!((state.as_ptr() as usize) % 32, 0, "InnerState must be 32 byte aligned");
-
-        let mask128 = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
-        let mask256 = _mm256_inserti128_si256(_mm256_castsi128_si256(mask128), mask128, 1);
-
-        let mut i = 0usize;
-
-        while i < N128 {
-            //
-            // first 256 bits block (pos -> i)
-            //
-
-            let ji = i + POS1;
-            let b_idx128 = if ji >= N128 { ji - N128 } else { ji };
-
-            let ci = i + N128 - 2;
-            let c_idx128 = if ci >= N128 { ci - N128 } else { ci };
-
-            let di = i + N128 - 1;
-            let d_idx128 = if di >= N128 { di - N128 } else { di };
-
-            let a = load256_from_128_chunks(state.as_ptr(), i);
-            let b = load256_from_128_chunks(state.as_ptr(), b_idx128);
-            let c = load256_from_128_chunks(state.as_ptr(), c_idx128);
-            let d = load256_from_128_chunks(state.as_ptr(), d_idx128);
-
-            let rr = recurrence_relation_256(a, b, c, d, mask256);
-            store256_to_128_chunks(state.as_mut_ptr(), i, rr);
-
-            //
-            // second 256 bits block (pos -> i + 2)
-            //
-
-            // NOTE: check to avoid state overflow
-            let next_i128 = i + 2;
-
-            if next_i128 < N128 {
-                let ji = next_i128 + POS1;
-                let b_idx128 = if ji >= N128 { ji - N128 } else { ji };
-
-                let ci = next_i128 + N128 - 2;
-                let c_idx128 = if ci >= N128 { ci - N128 } else { ci };
-
-                let di = next_i128 + N128 - 1;
-                let d_idx128 = if di >= N128 { di - N128 } else { di };
-
-                let a = load256_from_128_chunks(state.as_ptr(), next_i128);
-                let b = load256_from_128_chunks(state.as_ptr(), b_idx128);
-                let c = load256_from_128_chunks(state.as_ptr(), c_idx128);
-                let d = load256_from_128_chunks(state.as_ptr(), d_idx128);
-
-                let rr = recurrence_relation_256(a, b, c, d, mask256);
-                store256_to_128_chunks(state.as_mut_ptr(), next_i128, rr);
-            }
-
-            // NOTE: As single avx2 lane is 256 bits wide, and we consumed bits worth
-            // 2 avx2 lanes, i.e. `(2 * 128) * 2 -> 512` bits, which is `128 * 4`
-            i += 4;
-        }
-    }
-
-    #[target_feature(enable = "avx2")]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    pub(crate) unsafe fn recurrence_relation_256(
-        a: __m256i,
-        b: __m256i,
-        c: __m256i,
-        d: __m256i,
-        mask256: __m256i,
-    ) -> __m256i {
-        // x = a << SL1 (per-lane)
-        let x = _mm256_slli_epi32(a, SL1 as i32);
-
-        // y = (b >> SR1) & mask
-        let y = _mm256_and_si256(_mm256_srli_epi32(b, SR1 as i32), mask256);
-
-        // c_sr2 = shift_right_256_epi32(c)
-        let c_sr2 = shift_right_256_epi32(c);
-
-        // d_sl2 = shift_left_256_epi32(d)
-        let d_sl2 = shift_left_256_epi32(d);
-
-        // r = a ^ x ^ y ^ c_sr2 ^ d_sl2
-        let mut r = _mm256_xor_si256(a, x);
-
-        r = _mm256_xor_si256(r, y);
-        r = _mm256_xor_si256(r, c_sr2);
-        r = _mm256_xor_si256(r, d_sl2);
-
-        r
-    }
-
-    #[target_feature(enable = "avx2")]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    pub(crate) unsafe fn shift_left_256_epi32(x: __m256i) -> __m256i {
-        let tmp = _mm256_slli_si256(x, 4);
-        let x1 = _mm256_slli_epi32(x, SL1 as i32);
-        let x2 = _mm256_srli_epi32(tmp, (32 - SL1) as i32);
-
-        _mm256_or_si256(x1, x2)
-    }
-
-    #[target_feature(enable = "avx2")]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    pub(crate) unsafe fn shift_right_256_epi32(x: __m256i) -> __m256i {
-        let tmp = _mm256_srli_si256(x, 4);
-        let x1 = _mm256_srli_epi32(x, SR1 as i32);
-        let x2 = _mm256_slli_epi32(tmp, (32 - SR1) as i32);
-
-        _mm256_or_si256(x1, x2)
-    }
-
-    #[target_feature(enable = "avx2")]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    pub(crate) unsafe fn load256_from_128_chunks(src: *const u32, idx128: usize) -> __m256i {
-        let u32_idx = idx128 * U32S_PER_128;
-
-        // NOTE: if both 128 blocks are contiguous we can use this fast path
-        if idx128 + 1 < N128 {
-            let p = src.add(u32_idx) as *const __m256i;
-            return _mm256_load_si256(p);
-        }
-
-        let lo = _mm_load_si128(src.add(u32_idx) as *const __m128i);
-        let hi = _mm_load_si128(src.add(0) as *const __m128i);
-
-        _mm256_inserti128_si256(_mm256_castsi128_si256(lo), hi, 1)
-    }
-
-    #[target_feature(enable = "avx2")]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    pub(crate) unsafe fn store256_to_128_chunks(dst: *mut u32, idx128: usize, v: __m256i) {
-        let u32_idx = idx128 * U32S_PER_128;
-
-        // NOTE: if both 128 blocks are contiguous we can use this fast path
-        if idx128 + 1 < N128 {
-            let p = dst.add(u32_idx) as *mut __m256i;
-            _mm256_store_si256(p, v);
-
-            return;
-        }
-
-        let lo = _mm256_castsi256_si128(v);
-        let hi = _mm256_extracti128_si256(v, 1);
-
-        _mm_store_si128(dst.add(u32_idx) as *mut __m128i, lo);
-        _mm_store_si128(dst.add(0) as *mut __m128i, hi);
     }
 }
 
@@ -492,107 +331,6 @@ mod tests {
             simd.gen_state(&mut s);
 
             assert_ne!(s.0, original, "SFMT refill must update the internal state");
-        }
-    }
-
-    #[cfg(all(target_arch = "x86_64"))]
-    mod target_avx2 {
-        use super::*;
-        use std::arch::x86_64::*;
-        use std::mem;
-
-        #[inline(always)]
-        #[allow(unsafe_op_in_unsafe_fn)]
-        unsafe fn loadu256(v: &[u32; 8]) -> __m256i {
-            _mm256_loadu_si256(v.as_ptr() as *const __m256i)
-        }
-
-        #[inline(always)]
-        #[allow(unsafe_op_in_unsafe_fn)]
-        unsafe fn storeu256(v: __m256i) -> [u32; 8] {
-            let mut out = mem::MaybeUninit::<[u32; 8]>::uninit();
-            _mm256_storeu_si256(out.as_mut_ptr() as *mut __m256i, v);
-
-            out.assume_init()
-        }
-
-        #[test]
-        fn test_shift_right_256_epi32_shifts_correctly() {
-            unsafe {
-                let input = [1, 2, 3, 4, 5, 6, 7, 8];
-                let x = loadu256(&input);
-                let r = avx2::shift_right_256_epi32(x);
-                let result = storeu256(r);
-
-                assert!(result.iter().zip(input).all(|(&r, i)| r <= i));
-            }
-        }
-
-        #[test]
-        fn test_shift_left_256_epi32_shifts_correctly() {
-            unsafe {
-                let input = [1, 2, 3, 4, 5, 6, 7, 8];
-                let x = loadu256(&input);
-                let r = avx2::shift_left_256_epi32(x);
-                let result = storeu256(r);
-
-                assert!(result.iter().zip(input).all(|(&r, i)| r >= i));
-            }
-        }
-
-        #[test]
-        fn test_recurrence_relation_256_deterministic() {
-            unsafe {
-                let a = _mm256_set1_epi32(0x11111111);
-                let b = _mm256_set1_epi32(0x22222222);
-                let c = _mm256_set1_epi32(0x33333333);
-                let d = _mm256_set1_epi32(0x44444444);
-                let mask = _mm256_set1_epi32(0xdeadbeefu32 as i32);
-
-                let r1 = avx2::recurrence_relation_256(a, b, c, d, mask);
-                let r2 = avx2::recurrence_relation_256(a, b, c, d, mask);
-
-                let o1 = storeu256(r1);
-                let o2 = storeu256(r2);
-
-                assert_eq!(o1, o2, "recurrence must be deterministic");
-            }
-        }
-
-        #[test]
-        fn test_generate_inner_state_changes_state() {
-            let mut state = [0xabcdef01u32; STATE32_LEN];
-            let prev = state;
-
-            unsafe { avx2::generate_inner_state(&mut state) };
-
-            assert_ne!(state, prev, "state must be mutated after generation");
-        }
-
-        #[test]
-        fn test_generate_inner_state_deterministic() {
-            let mut s1 = [0x55555555u32; STATE32_LEN];
-            let mut s2 = s1.clone();
-
-            unsafe {
-                avx2::generate_inner_state(&mut s1);
-                avx2::generate_inner_state(&mut s2);
-            }
-
-            assert_eq!(s1, s2, "identical input -> identical output");
-        }
-
-        #[test]
-        fn test_avx2_vs_sse2_equivalence() {
-            let mut s_avx = [0x99999999u32; STATE32_LEN];
-            let mut s_sse = s_avx.clone();
-
-            unsafe {
-                avx2::generate_inner_state(&mut s_avx);
-                sse2::generate_inner_state(&mut s_sse);
-            }
-
-            assert_eq!(&s_avx[..64], &s_sse[..64]);
         }
     }
 
