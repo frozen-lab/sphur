@@ -401,4 +401,86 @@ mod tests {
             }
         }
     }
+
+    #[cfg(target_arch = "aarch64")]
+    mod target_neon {
+        use super::*;
+        use core::arch::aarch64::*;
+
+        #[test]
+        fn test_shift_right_128_epi32_shifts_correctly() {
+            unsafe {
+                let mut buf = [0u32; 4];
+                let orig: [u32; 4] = [1, 2, 3, 4];
+
+                let x = _mm_set_epi32(0x00000004, 0x00000003, 0x00000002, 0x00000001);
+                let r = super::neon::shift_right_128_epi32(x);
+
+                _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
+
+                let shifted = ((u128::from(orig[3]) << 96)
+                    | (u128::from(orig[2]) << 64)
+                    | (u128::from(orig[1]) << 32)
+                    | u128::from(orig[0]))
+                    >> super::SR1;
+
+                let expected: [u32; 4] = [
+                    (shifted & 0xFFFF_FFFF) as u32,
+                    ((shifted >> 32) & 0xFFFF_FFFF) as u32,
+                    ((shifted >> 64) & 0xFFFF_FFFF) as u32,
+                    ((shifted >> 96) & 0xFFFF_FFFF) as u32,
+                ];
+
+                assert_eq!(buf, expected, "cross-lane right shift mismatch");
+            }
+        }
+
+        #[test]
+        fn test_shift_left_128_epi32_shifts_correctly() {
+            unsafe {
+                let x = _mm_set_epi32(1, 2, 3, 4);
+                let r = super::neon::shift_left_128_epi32(x);
+
+                let mut buf = [0u32; 4];
+                _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
+
+                assert!(buf.iter().any(|&v| v > 4), "left shift should increase values");
+            }
+        }
+
+        #[test]
+        fn test_recurrence_relation_deterministic() {
+            unsafe {
+                let a = _mm_set1_epi32(0xAAAAAAAAu32 as i32);
+                let b = _mm_set1_epi32(0xBBBBBBBBu32 as i32);
+                let c = _mm_set1_epi32(0xCCCCCCCCu32 as i32);
+                let d = _mm_set1_epi32(0xDDDDDDDDu32 as i32);
+                let mask = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
+
+                let r1 = super::neon::recurrence_relation(a, b, c, d, mask);
+                let r2 = super::neon::recurrence_relation(a, b, c, d, mask);
+
+                let mut buf1 = [0u32; 4];
+                let mut buf2 = [0u32; 4];
+
+                _mm_storeu_si128(buf1.as_mut_ptr() as *mut __m128i, r1);
+                _mm_storeu_si128(buf2.as_mut_ptr() as *mut __m128i, r2);
+
+                assert_eq!(buf1, buf2, "recurrence_relation must be deterministic");
+            }
+        }
+
+        #[test]
+        fn test_generate_inner_state_is_deterministic() {
+            unsafe {
+                let mut s1 = InnerState([1u32; STATE32_LEN]);
+                let mut s2 = InnerState([1u32; STATE32_LEN]);
+
+                super::neon::generate_inner_state(&mut s1.0);
+                super::neon::generate_inner_state(&mut s2.0);
+
+                assert_eq!(s1.0, s2.0, "identical inputs should yield identical outputs");
+            }
+        }
+    }
 }
