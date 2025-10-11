@@ -15,7 +15,7 @@ type State = [__m128i; N];
 
 #[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn gen_state(state: &mut State) {
+unsafe fn regen_state(state: &mut State) {
     for i in 0..N {
         let b_idx = (i + POS1) % N;
         let c_idx = (i + N - 2) % N;
@@ -103,4 +103,74 @@ unsafe fn sl_128_lane(x: __m128i) -> __m128i {
     let part2 = _mm_srli_epi32(tmp, 32 - SL2);
 
     _mm_or_si128(part1, part2)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::arch::x86_64::*;
+
+    #[test]
+    fn test_sr_128_lane_basic() {
+        unsafe {
+            let x = _mm_set_epi32(0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d);
+            let r = sr_128_lane(x);
+
+            let mut buf = [0u32; 4];
+            _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
+
+            assert_ne!(buf, [0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d]);
+        }
+    }
+
+    #[test]
+    fn test_sl_128_lane_basic() {
+        unsafe {
+            let x = _mm_set_epi32(0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d);
+            let r = sl_128_lane(x);
+
+            let mut buf = [0u32; 4];
+            _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
+
+            assert_ne!(buf, [0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d]); // changed bits
+        }
+    }
+
+    #[test]
+    fn test_recurrence_relation_stability() {
+        unsafe {
+            let a = _mm_set1_epi32(0xdeadbeefu32 as i32);
+            let b = _mm_set1_epi32(0x12345678);
+            let c = _mm_set1_epi32(0x0badf00d);
+            let d = _mm_set1_epi32(0x9abcdef0u32 as i32);
+
+            let r1 = recurrence_relation(a, b, c, d);
+            let r2 = recurrence_relation(a, b, c, d);
+
+            let mut buf1 = [0u32; 4];
+            let mut buf2 = [0u32; 4];
+
+            _mm_storeu_si128(buf1.as_mut_ptr() as *mut __m128i, r1);
+            _mm_storeu_si128(buf2.as_mut_ptr() as *mut __m128i, r2);
+
+            assert_eq!(buf1, buf2);
+        }
+    }
+
+    #[test]
+    fn test_gen_state_runs() {
+        unsafe {
+            let mut state: State = core::mem::zeroed();
+
+            regen_state(&mut state);
+
+            for v in &state {
+                let mut tmp = [0u32; 4];
+                _mm_storeu_si128(tmp.as_mut_ptr() as *mut __m128i, *v);
+            }
+
+            // basic sanity check (no crash)
+            assert!(true, "no crash, just run");
+        }
+    }
 }
