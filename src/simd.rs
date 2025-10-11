@@ -15,6 +15,51 @@ type State = [__m128i; N];
 
 #[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn gen_state(state: &mut State) {
+    for i in 0..N {
+        let b_idx = (i + POS1) % N;
+        let c_idx = (i + N - 2) % N;
+        let d_idx = (i + N - 1) % N;
+
+        let a = state[i];
+        let b = state[b_idx];
+        let c = state[c_idx];
+        let d = state[d_idx];
+
+        state[i] = recurrence_relation(a, b, c, d);
+    }
+}
+
+#[inline(always)]
+#[allow(unsafe_op_in_unsafe_fn)]
+/// Performs SFMT recurrence relation
+///
+/// ## Algo
+///
+/// ```md
+/// w = (a << SL1)
+/// x = ((b >> SR1) & MSK)
+/// y = (c >> 128 bits by SR2 logic)
+/// z = (d << 128 bits by SL2 logic)
+///
+/// out = a ^ w ^ x ^ y ^ z
+/// ```
+unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) -> __m128i {
+    let mask: __m128i = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
+
+    let ax = _mm_slli_epi32(a, SL1 as i32);
+    let by = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), mask);
+    let c_sr2 = sr_128_lane(c);
+    let d_sl2 = sl_128_lane(d);
+
+    let mut r = _mm_xor_si128(a, ax);
+    r = _mm_xor_si128(r, by);
+    r = _mm_xor_si128(r, c_sr2);
+    _mm_xor_si128(r, d_sl2)
+}
+
+#[inline(always)]
+#[allow(unsafe_op_in_unsafe_fn)]
 /// Perform right shft on entire sse2 lane
 ///
 /// ## Visulization
