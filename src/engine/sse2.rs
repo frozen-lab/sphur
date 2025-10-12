@@ -117,3 +117,60 @@ unsafe fn sl_128_lane(x: __m128i) -> __m128i {
 
     _mm_or_si128(part1, part2)
 }
+
+#[cfg(test)]
+mod sse2_tests {
+    use super::*;
+
+    mod indep_functions {
+        use super::*;
+
+        #[test]
+        fn test_sr_128_lane_basic() {
+            unsafe {
+                let x = _mm_set_epi32(0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d);
+                let r = sr_128_lane(x);
+
+                let mut buf = [0u32; 4];
+                _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
+
+                assert_ne!(buf, [0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d]);
+            }
+        }
+
+        #[test]
+        fn test_sl_128_lane_basic() {
+            unsafe {
+                let x = _mm_set_epi32(0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d);
+                let r = sl_128_lane(x);
+
+                let mut buf = [0u32; 4];
+                _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
+
+                assert_ne!(buf, [0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d]);
+                // changed bits
+            }
+        }
+
+        #[test]
+        fn test_recurrence_relation_stability() {
+            unsafe {
+                let a = _mm_set1_epi32(0xdeadbeefu32 as i32);
+                let b = _mm_set1_epi32(0x12345678);
+                let c = _mm_set1_epi32(0x0badf00d);
+                let d = _mm_set1_epi32(0x9abcdef0u32 as i32);
+
+                let r1 = recurrence_relation(a, b, c, d);
+                let r2 = recurrence_relation(a, b, c, d);
+
+                let mut buf1 = [0u32; 4];
+                let mut buf2 = [0u32; 4];
+
+                _mm_storeu_si128(buf1.as_mut_ptr() as *mut __m128i, r1);
+                _mm_storeu_si128(buf2.as_mut_ptr() as *mut __m128i, r2);
+
+                assert_eq!(buf1, buf2);
+            }
+        }
+    }
+}
