@@ -14,6 +14,6 @@ impl<E: crate::engine::Engine<N>, const N: usize> State<E, N> {
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn regenerate(&mut self) {
-        E::regenerate(&mut self.state);
+        E::regen(&mut self.state);
     }
 }
