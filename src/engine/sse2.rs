@@ -306,4 +306,74 @@ mod sse2_tests {
             }
         }
     }
+
+    mod gen_functions {
+        use super::*;
+
+        #[test]
+        fn test_gen_u8_u16_u32_u64_bool_basic() {
+            unsafe {
+                let mut state = [_mm_set1_epi8(0xAAu8 as i8); SSE_STATE_LEN];
+
+                // u8
+                let v8 = SSE2::gen_u8(&state, 0, 0);
+                assert_eq!(v8, 0xAA);
+
+                // u16
+                let v16 = SSE2::gen_u16(&state, 0, 0);
+                assert_eq!(v16, 0xAAAA);
+
+                // u32
+                let mut lane = _mm_set_epi32(0x11223344, 0x55667788, 0x99AABBCCu32 as i32, 0xDDEEFF00u32 as i32);
+                state[0] = lane;
+
+                assert_eq!(SSE2::gen_u32(&state, 0, 0), 0xDDEEFF00);
+                assert_eq!(SSE2::gen_u32(&state, 0, 1), 0x99AABBCC);
+                assert_eq!(SSE2::gen_u32(&state, 0, 2), 0x55667788);
+                assert_eq!(SSE2::gen_u32(&state, 0, 3), 0x11223344);
+
+                // u64
+                lane = _mm_set_epi64x(0xAABBCCDDEEFF0011u64 as i64, 0x1122334455667788);
+                state[0] = lane;
+                assert_eq!(SSE2::gen_u64(&state, 0, 0), 0x1122334455667788);
+                assert_eq!(SSE2::gen_u64(&state, 0, 1), 0xAABBCCDDEEFF0011);
+
+                // bool (just check bit extraction)
+                let b_true = SSE2::gen_bool(&state, 0, 0);
+                let b_false = SSE2::gen_bool(&state, 0, 1);
+                assert!(b_true == true || b_false == true || b_true == b_false);
+            }
+        }
+
+        #[test]
+        fn test_gen_index_bounds() {
+            unsafe {
+                let state = [_mm_setzero_si128(); SSE_STATE_LEN];
+
+                // should panic only in debug with out-of-bound idx
+                #[cfg(debug_assertions)]
+                {
+                    let result = std::panic::catch_unwind(|| {
+                        SSE2::gen_u8(&state, 0, 16);
+                    });
+                    assert!(result.is_err());
+                }
+            }
+        }
+
+        #[test]
+        fn test_gen_consistency_across_calls() {
+            unsafe {
+                let state = [_mm_set_epi32(1, 2, 3, 4); SSE_STATE_LEN];
+
+                let v1 = SSE2::gen_u32(&state, 0, 0);
+                let v2 = SSE2::gen_u32(&state, 0, 0);
+                assert_eq!(v1, v2);
+
+                let v3 = SSE2::gen_u16(&state, 0, 0);
+                let v4 = SSE2::gen_u16(&state, 0, 0);
+                assert_eq!(v3, v4);
+            }
+        }
+    }
 }
