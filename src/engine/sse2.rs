@@ -173,4 +173,73 @@ mod sse2_tests {
             }
         }
     }
+
+    mod engine {
+        use super::*;
+
+        #[test]
+        fn test_gen_state_runs() {
+            unsafe {
+                let mut state = [_mm_set1_epi32(0x12345678u32 as i32); SSE2_STATE_LEN];
+
+                for i in 0..SSE2_STATE_LEN {
+                    let a = state[i];
+                    let b = state[(i + 93) % SSE2_STATE_LEN];
+                    let c = state[(i + SSE2_STATE_LEN - 2) % SSE2_STATE_LEN];
+                    let d = state[(i + SSE2_STATE_LEN - 1) % SSE2_STATE_LEN];
+
+                    state[i] = recurrence_relation(a, b, c, d);
+                }
+
+                // sanity check
+                let mut buf = [0u32; 4];
+                _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, state[0]);
+                assert_ne!(buf, [0x12345678; 4], "recurrence should mutate the state");
+
+                let mut unique = std::collections::HashSet::new();
+
+                for i in 0..SSE2_STATE_LEN {
+                    let mut tmp = [0u32; 4];
+
+                    _mm_storeu_si128(tmp.as_mut_ptr() as *mut __m128i, state[i]);
+                    unique.insert(tmp);
+                }
+
+                assert!(unique.len() > 1, "recurrence produced diverse state values");
+            }
+        }
+
+        #[test]
+        fn test_recurrence_determinism() {
+            unsafe {
+                let mut s1 = [_mm_set1_epi32(0xAABBCCDDu32 as i32); SSE2_STATE_LEN];
+                let mut s2 = [_mm_set1_epi32(0xAABBCCDDu32 as i32); SSE2_STATE_LEN];
+
+                for i in 0..SSE2_STATE_LEN {
+                    let a1 = s1[i];
+                    let b1 = s1[(i + 93) % SSE2_STATE_LEN];
+                    let c1 = s1[(i + SSE2_STATE_LEN - 2) % SSE2_STATE_LEN];
+                    let d1 = s1[(i + SSE2_STATE_LEN - 1) % SSE2_STATE_LEN];
+
+                    s1[i] = recurrence_relation(a1, b1, c1, d1);
+
+                    let a2 = s2[i];
+                    let b2 = s2[(i + 93) % SSE2_STATE_LEN];
+                    let c2 = s2[(i + SSE2_STATE_LEN - 2) % SSE2_STATE_LEN];
+                    let d2 = s2[(i + SSE2_STATE_LEN - 1) % SSE2_STATE_LEN];
+
+                    s2[i] = recurrence_relation(a2, b2, c2, d2);
+                }
+
+                for i in 0..SSE2_STATE_LEN {
+                    let mut buf1 = [0u32; 4];
+                    let mut buf2 = [0u32; 4];
+
+                    _mm_storeu_si128(buf1.as_mut_ptr() as *mut __m128i, s1[i]);
+                    _mm_storeu_si128(buf2.as_mut_ptr() as *mut __m128i, s2[i]);
+                    assert_eq!(buf1, buf2, "recurrence must be deterministic");
+                }
+            }
+        }
+    }
 }
