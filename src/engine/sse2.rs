@@ -1,7 +1,7 @@
 use super::init_engine_state;
 use core::arch::x86_64::*;
 
-pub(crate) const SSE2_STATE_LEN: usize = 156;
+pub(crate) const SSE_STATE_LEN: usize = 156;
 
 const SR1: i32 = 11;
 const SL1: i32 = 18;
@@ -14,24 +14,24 @@ const MSK: [u32; 4] = [0xdfffffefu32, 0xddfecb7fu32, 0xbffaffffu32, 0xbffffff6u3
 
 pub(crate) struct SSE2;
 
-impl super::Engine<SSE2_STATE_LEN> for SSE2 {
+impl super::Engine<SSE_STATE_LEN> for SSE2 {
     type Lane = __m128i;
 
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn new(seed: u64) -> [Self::Lane; SSE2_STATE_LEN] {
-        init_engine_state::<Self::Lane, SSE2_STATE_LEN, { SSE2_STATE_LEN * 4 }>(seed, |w| {
+    unsafe fn new(seed: u64) -> [Self::Lane; SSE_STATE_LEN] {
+        init_engine_state::<Self::Lane, SSE_STATE_LEN, { SSE_STATE_LEN * 4 }>(seed, |w| {
             _mm_set_epi32(w[3] as i32, w[2] as i32, w[1] as i32, w[0] as i32)
         })
     }
 
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn regen(state: &mut [Self::Lane; SSE2_STATE_LEN]) {
-        for i in 0..SSE2_STATE_LEN {
-            let b_idx = (i + POS1) % SSE2_STATE_LEN;
-            let c_idx = (i + SSE2_STATE_LEN - 2) % SSE2_STATE_LEN;
-            let d_idx = (i + SSE2_STATE_LEN - 1) % SSE2_STATE_LEN;
+    unsafe fn regen(state: &mut [Self::Lane; SSE_STATE_LEN]) {
+        for i in 0..SSE_STATE_LEN {
+            let b_idx = (i + POS1) % SSE_STATE_LEN;
+            let c_idx = (i + SSE_STATE_LEN - 2) % SSE_STATE_LEN;
+            let d_idx = (i + SSE_STATE_LEN - 1) % SSE_STATE_LEN;
 
             let a = state[i];
             let b = state[b_idx];
@@ -40,6 +40,69 @@ impl super::Engine<SSE2_STATE_LEN> for SSE2 {
 
             state[i] = recurrence_relation(a, b, c, d);
         }
+    }
+
+    #[inline(always)]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn gen_u64(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u64 {
+        // sanity check
+        debug_assert!(idx < 2, "Index must be smaller than 2 for SSE lane");
+
+        let lane_ref = state.get_unchecked(lane);
+        let ptr = lane_ref as *const __m128i as *const u64;
+
+        *ptr.add(idx)
+    }
+
+    #[inline(always)]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn gen_u32(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u32 {
+        // sanity check
+        debug_assert!(idx < 4, "Index must be smaller then 4 for SSE state");
+
+        let lane_ref = state.get_unchecked(lane);
+        let ptr = lane_ref as *const __m128i as *const u32;
+
+        *ptr.add(idx)
+    }
+
+    #[inline(always)]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn gen_u16(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u16 {
+        debug_assert!(
+            idx < 8,
+            "Index must be smaller than 8 for SSE lane (128 bits / 16 bits)"
+        );
+
+        let lane_ref = state.get_unchecked(lane);
+        let ptr = lane_ref as *const __m128i as *const u16;
+        *ptr.add(idx)
+    }
+
+    #[inline(always)]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn gen_u8(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u8 {
+        debug_assert!(
+            idx < 16,
+            "Index must be smaller than 16 for SSE lane (128 bits / 8 bits)"
+        );
+
+        let lane_ref = state.get_unchecked(lane);
+        let ptr = lane_ref as *const __m128i as *const u8;
+        *ptr.add(idx)
+    }
+
+    #[inline(always)]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn gen_bool(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> bool {
+        debug_assert!(
+            idx < 16,
+            "Index must be smaller than 16 for SSE lane (128 bits / 8 bits)"
+        );
+
+        let lane_ref = state.get_unchecked(lane);
+        let ptr = lane_ref as *const __m128i as *const u8;
+        *ptr.add(idx) & 1 != 0
     }
 }
 
@@ -121,6 +184,7 @@ unsafe fn sl_128_lane(x: __m128i) -> __m128i {
 #[cfg(test)]
 mod sse2_tests {
     use super::*;
+    use crate::engine::Engine;
 
     mod indep_functions {
         use super::*;
@@ -180,13 +244,13 @@ mod sse2_tests {
         #[test]
         fn test_gen_state_runs() {
             unsafe {
-                let mut state = [_mm_set1_epi32(0x12345678u32 as i32); SSE2_STATE_LEN];
+                let mut state = [_mm_set1_epi32(0x12345678u32 as i32); SSE_STATE_LEN];
 
-                for i in 0..SSE2_STATE_LEN {
+                for i in 0..SSE_STATE_LEN {
                     let a = state[i];
-                    let b = state[(i + 93) % SSE2_STATE_LEN];
-                    let c = state[(i + SSE2_STATE_LEN - 2) % SSE2_STATE_LEN];
-                    let d = state[(i + SSE2_STATE_LEN - 1) % SSE2_STATE_LEN];
+                    let b = state[(i + 93) % SSE_STATE_LEN];
+                    let c = state[(i + SSE_STATE_LEN - 2) % SSE_STATE_LEN];
+                    let d = state[(i + SSE_STATE_LEN - 1) % SSE_STATE_LEN];
 
                     state[i] = recurrence_relation(a, b, c, d);
                 }
@@ -198,7 +262,7 @@ mod sse2_tests {
 
                 let mut unique = std::collections::HashSet::new();
 
-                for i in 0..SSE2_STATE_LEN {
+                for i in 0..SSE_STATE_LEN {
                     let mut tmp = [0u32; 4];
 
                     _mm_storeu_si128(tmp.as_mut_ptr() as *mut __m128i, state[i]);
@@ -212,26 +276,26 @@ mod sse2_tests {
         #[test]
         fn test_recurrence_determinism() {
             unsafe {
-                let mut s1 = [_mm_set1_epi32(0xAABBCCDDu32 as i32); SSE2_STATE_LEN];
-                let mut s2 = [_mm_set1_epi32(0xAABBCCDDu32 as i32); SSE2_STATE_LEN];
+                let mut s1 = [_mm_set1_epi32(0xAABBCCDDu32 as i32); SSE_STATE_LEN];
+                let mut s2 = [_mm_set1_epi32(0xAABBCCDDu32 as i32); SSE_STATE_LEN];
 
-                for i in 0..SSE2_STATE_LEN {
+                for i in 0..SSE_STATE_LEN {
                     let a1 = s1[i];
-                    let b1 = s1[(i + 93) % SSE2_STATE_LEN];
-                    let c1 = s1[(i + SSE2_STATE_LEN - 2) % SSE2_STATE_LEN];
-                    let d1 = s1[(i + SSE2_STATE_LEN - 1) % SSE2_STATE_LEN];
+                    let b1 = s1[(i + 93) % SSE_STATE_LEN];
+                    let c1 = s1[(i + SSE_STATE_LEN - 2) % SSE_STATE_LEN];
+                    let d1 = s1[(i + SSE_STATE_LEN - 1) % SSE_STATE_LEN];
 
                     s1[i] = recurrence_relation(a1, b1, c1, d1);
 
                     let a2 = s2[i];
-                    let b2 = s2[(i + 93) % SSE2_STATE_LEN];
-                    let c2 = s2[(i + SSE2_STATE_LEN - 2) % SSE2_STATE_LEN];
-                    let d2 = s2[(i + SSE2_STATE_LEN - 1) % SSE2_STATE_LEN];
+                    let b2 = s2[(i + 93) % SSE_STATE_LEN];
+                    let c2 = s2[(i + SSE_STATE_LEN - 2) % SSE_STATE_LEN];
+                    let d2 = s2[(i + SSE_STATE_LEN - 1) % SSE_STATE_LEN];
 
                     s2[i] = recurrence_relation(a2, b2, c2, d2);
                 }
 
-                for i in 0..SSE2_STATE_LEN {
+                for i in 0..SSE_STATE_LEN {
                     let mut buf1 = [0u32; 4];
                     let mut buf2 = [0u32; 4];
 

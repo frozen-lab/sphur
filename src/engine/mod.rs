@@ -8,6 +8,12 @@ pub(crate) trait Engine<const N: usize> {
 
     unsafe fn new(seed: u64) -> [Self::Lane; N];
     unsafe fn regen(state: &mut [Self::Lane; N]);
+
+    unsafe fn gen_u64(state: &[Self::Lane; N], lane: usize, idx: usize) -> u64;
+    unsafe fn gen_u32(state: &[Self::Lane; N], lane: usize, idx: usize) -> u32;
+    unsafe fn gen_u16(state: &[Self::Lane; N], lane: usize, idx: usize) -> u16;
+    unsafe fn gen_u8(state: &[Self::Lane; N], lane: usize, idx: usize) -> u8;
+    unsafe fn gen_bool(state: &[Self::Lane; N], lane: usize, idx: usize) -> bool;
 }
 
 #[inline(always)]
