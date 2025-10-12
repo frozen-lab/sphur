@@ -14,9 +14,9 @@ const SL2: i32 = 1;
 const POS1: usize = 122;
 const MSK: [u32; 4] = [0xdfffffefu32, 0xddfecb7fu32, 0xbffaffffu32, 0xbffffff6u32];
 
-pub(crate) struct SSE2;
+pub(crate) struct SSE;
 
-impl Engine<SSE_STATE_LEN> for SSE2 {
+impl Engine<SSE_STATE_LEN> for SSE {
     type Lane = __m128i;
 
     #[inline(always)]
@@ -153,7 +153,26 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
 ///
 /// ```
 unsafe fn sr_128_lane(x: __m128i) -> __m128i {
+    // base pre elem
     let part1 = _mm_srli_epi32(x, SR2);
+
+    #[cfg(target_feature = "ssse3")]
+    {
+        let shifted_bytes = _mm_alignr_epi8(x, x, SR2 / 8);
+        let part2 = _mm_slli_epi32(shifted_bytes, 32 - SR2);
+
+        #[cfg(target_feature = "sse4.1")]
+        {
+            // NOTE: W/ SSE4.1 we could use blendv instead of OR for
+            // finer merges
+
+            let mask = _mm_set1_epi32(-1);
+            return _mm_blendv_epi8(part1, part2, mask);
+        }
+
+        return _mm_or_si128(part1, part2);
+    }
+
     let tmp = _mm_srli_si128(x, 4);
     let part2 = _mm_slli_epi32(tmp, 32 - SR2);
 
@@ -184,7 +203,7 @@ unsafe fn sl_128_lane(x: __m128i) -> __m128i {
 }
 
 #[cfg(test)]
-mod sse2_tests {
+mod sse_tests {
     use super::*;
 
     mod indep_functions {
@@ -337,31 +356,31 @@ mod sse2_tests {
                 let mut state = [_mm_set1_epi8(0xAAu8 as i8); SSE_STATE_LEN];
 
                 // u8
-                let v8 = SSE2::gen_u8(&state, 0, 0);
+                let v8 = SSE::gen_u8(&state, 0, 0);
                 assert_eq!(v8, 0xAA);
 
                 // u16
-                let v16 = SSE2::gen_u16(&state, 0, 0);
+                let v16 = SSE::gen_u16(&state, 0, 0);
                 assert_eq!(v16, 0xAAAA);
 
                 // u32
                 let mut lane = _mm_set_epi32(0x11223344, 0x55667788, 0x99AABBCCu32 as i32, 0xDDEEFF00u32 as i32);
                 state[0] = lane;
 
-                assert_eq!(SSE2::gen_u32(&state, 0, 0), 0xDDEEFF00);
-                assert_eq!(SSE2::gen_u32(&state, 0, 1), 0x99AABBCC);
-                assert_eq!(SSE2::gen_u32(&state, 0, 2), 0x55667788);
-                assert_eq!(SSE2::gen_u32(&state, 0, 3), 0x11223344);
+                assert_eq!(SSE::gen_u32(&state, 0, 0), 0xDDEEFF00);
+                assert_eq!(SSE::gen_u32(&state, 0, 1), 0x99AABBCC);
+                assert_eq!(SSE::gen_u32(&state, 0, 2), 0x55667788);
+                assert_eq!(SSE::gen_u32(&state, 0, 3), 0x11223344);
 
                 // u64
                 lane = _mm_set_epi64x(0xAABBCCDDEEFF0011u64 as i64, 0x1122334455667788);
                 state[0] = lane;
-                assert_eq!(SSE2::gen_u64(&state, 0, 0), 0x1122334455667788);
-                assert_eq!(SSE2::gen_u64(&state, 0, 1), 0xAABBCCDDEEFF0011);
+                assert_eq!(SSE::gen_u64(&state, 0, 0), 0x1122334455667788);
+                assert_eq!(SSE::gen_u64(&state, 0, 1), 0xAABBCCDDEEFF0011);
 
                 // bool (just check bit extraction)
-                let b_true = SSE2::gen_bool(&state, 0, 0);
-                let b_false = SSE2::gen_bool(&state, 0, 1);
+                let b_true = SSE::gen_bool(&state, 0, 0);
+                let b_false = SSE::gen_bool(&state, 0, 1);
                 assert!(b_true == true || b_false == true || b_true == b_false);
             }
         }
@@ -375,7 +394,7 @@ mod sse2_tests {
                 #[cfg(debug_assertions)]
                 {
                     let result = std::panic::catch_unwind(|| {
-                        SSE2::gen_u8(&state, 0, 16);
+                        SSE::gen_u8(&state, 0, 16);
                     });
                     assert!(result.is_err());
                 }
@@ -387,12 +406,12 @@ mod sse2_tests {
             unsafe {
                 let state = [_mm_set_epi32(1, 2, 3, 4); SSE_STATE_LEN];
 
-                let v1 = SSE2::gen_u32(&state, 0, 0);
-                let v2 = SSE2::gen_u32(&state, 0, 0);
+                let v1 = SSE::gen_u32(&state, 0, 0);
+                let v2 = SSE::gen_u32(&state, 0, 0);
                 assert_eq!(v1, v2);
 
-                let v3 = SSE2::gen_u16(&state, 0, 0);
-                let v4 = SSE2::gen_u16(&state, 0, 0);
+                let v3 = SSE::gen_u16(&state, 0, 0);
+                let v4 = SSE::gen_u16(&state, 0, 0);
                 assert_eq!(v3, v4);
             }
         }

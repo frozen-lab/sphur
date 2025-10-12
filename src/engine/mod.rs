@@ -1,5 +1,5 @@
 #[cfg(target_arch = "x86_64")]
-pub(crate) mod sse2;
+pub(crate) mod sse;
 
 const PARITY: [u32; 4] = [0x00000001, 0x00000000, 0x00000000, 0x13c9e684];
 
