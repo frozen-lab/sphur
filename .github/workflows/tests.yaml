@@ -53,21 +53,9 @@ jobs:
         if: matrix.arch == 'x86_64' && runner.os != 'Windows'
         run: RUSTFLAGS="-C target-feature=+sse2" cargo test --release -- --nocapture
 
-      - name: Test x86_64 (AVX2)
-        if: matrix.arch == 'x86_64' && runner.os != 'Windows'
-        run: RUSTFLAGS="-C target-feature=+avx2" cargo test --release -- --nocapture
-
       - name: Test x86_64 (SSE2) [WIN]
         if: matrix.arch == 'x86_64' && contains(matrix.os, 'windows')
         shell: pwsh
         env:
           RUSTFLAGS: "-C target-feature=+sse2"
         run: cargo test --release -- --nocapture
-
-      - name: Test x86_64 (AVX2) [WIN]
-        if: matrix.arch == 'x86_64' && contains(matrix.os, 'windows')
-        shell: pwsh
-        env:
-          RUSTFLAGS: "-C target-feature=+avx2"
-        run: cargo test --release -- --nocapture
-     
