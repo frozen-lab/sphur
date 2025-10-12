@@ -1,4 +1,6 @@
 use super::init_engine_state;
+use super::Engine;
+
 use core::arch::x86_64::*;
 
 pub(crate) const SSE_STATE_LEN: usize = 156;
@@ -14,7 +16,7 @@ const MSK: [u32; 4] = [0xdfffffefu32, 0xddfecb7fu32, 0xbffaffffu32, 0xbffffff6u3
 
 pub(crate) struct SSE2;
 
-impl super::Engine<SSE_STATE_LEN> for SSE2 {
+impl Engine<SSE_STATE_LEN> for SSE2 {
     type Lane = __m128i;
 
     #[inline(always)]
@@ -184,7 +186,6 @@ unsafe fn sl_128_lane(x: __m128i) -> __m128i {
 #[cfg(test)]
 mod sse2_tests {
     use super::*;
-    use crate::engine::Engine;
 
     mod indep_functions {
         use super::*;
@@ -274,35 +275,55 @@ mod sse2_tests {
         }
 
         #[test]
-        fn test_recurrence_determinism() {
+        fn test_recurrence_diverges_with_different_seed() {
             unsafe {
-                let mut s1 = [_mm_set1_epi32(0xAABBCCDDu32 as i32); SSE_STATE_LEN];
-                let mut s2 = [_mm_set1_epi32(0xAABBCCDDu32 as i32); SSE_STATE_LEN];
+                let mut s1 = [_mm_set1_epi32(0xAAAAAAAAu32 as i32); SSE_STATE_LEN];
+                let mut s2 = [_mm_set1_epi32(0xAAAAAAABu32 as i32); SSE_STATE_LEN];
 
                 for i in 0..SSE_STATE_LEN {
-                    let a1 = s1[i];
-                    let b1 = s1[(i + 93) % SSE_STATE_LEN];
-                    let c1 = s1[(i + SSE_STATE_LEN - 2) % SSE_STATE_LEN];
-                    let d1 = s1[(i + SSE_STATE_LEN - 1) % SSE_STATE_LEN];
+                    let (a1, b1, c1, d1) = (
+                        s1[i],
+                        s1[(i + 93) % SSE_STATE_LEN],
+                        s1[(i + SSE_STATE_LEN - 2) % SSE_STATE_LEN],
+                        s1[(i + SSE_STATE_LEN - 1) % SSE_STATE_LEN],
+                    );
+
+                    let (a2, b2, c2, d2) = (
+                        s2[i],
+                        s2[(i + 93) % SSE_STATE_LEN],
+                        s2[(i + SSE_STATE_LEN - 2) % SSE_STATE_LEN],
+                        s2[(i + SSE_STATE_LEN - 1) % SSE_STATE_LEN],
+                    );
 
                     s1[i] = recurrence_relation(a1, b1, c1, d1);
-
-                    let a2 = s2[i];
-                    let b2 = s2[(i + 93) % SSE_STATE_LEN];
-                    let c2 = s2[(i + SSE_STATE_LEN - 2) % SSE_STATE_LEN];
-                    let d2 = s2[(i + SSE_STATE_LEN - 1) % SSE_STATE_LEN];
-
                     s2[i] = recurrence_relation(a2, b2, c2, d2);
                 }
 
-                for i in 0..SSE_STATE_LEN {
-                    let mut buf1 = [0u32; 4];
-                    let mut buf2 = [0u32; 4];
+                let mut equal_count = 0;
 
-                    _mm_storeu_si128(buf1.as_mut_ptr() as *mut __m128i, s1[i]);
-                    _mm_storeu_si128(buf2.as_mut_ptr() as *mut __m128i, s2[i]);
-                    assert_eq!(buf1, buf2, "recurrence must be deterministic");
+                for i in 0..SSE_STATE_LEN {
+                    let mut b1 = [0u32; 4];
+                    let mut b2 = [0u32; 4];
+
+                    _mm_storeu_si128(b1.as_mut_ptr() as *mut __m128i, s1[i]);
+                    _mm_storeu_si128(b2.as_mut_ptr() as *mut __m128i, s2[i]);
+
+                    if b1 == b2 {
+                        equal_count += 1;
+                    }
                 }
+
+                assert!(equal_count < SSE_STATE_LEN / 4, "different seeds must diverge early");
+            }
+        }
+
+        #[test]
+        fn test_state_alignment_safe() {
+            unsafe {
+                let mut state = [_mm_setzero_si128(); SSE_STATE_LEN];
+                let ptr = state.as_ptr();
+
+                assert_eq!(ptr.align_offset(16), 0, "state must be 16-byte aligned");
             }
         }
     }
