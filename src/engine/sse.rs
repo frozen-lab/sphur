@@ -4,7 +4,7 @@ use super::Engine;
 use core::arch::x86_64::*;
 
 pub(crate) const SSE_STATE_LEN: usize = 156;
-const _: () = debug_assert!(SSE_STATE_LEN % 2 == 0);
+const _: () = assert!(SSE_STATE_LEN % 2 == 0);
 
 const SR1: i32 = 11;
 const SL1: i32 = 18;
@@ -110,10 +110,14 @@ impl Engine<SSE_STATE_LEN> for SSE {
     unsafe fn gen_u64(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u64 {
         // sanity check
         debug_assert!(idx < 2, "Index must be smaller than 2 for SSE lane");
+        let lane_ref = *state.get_unchecked(lane);
 
-        let lane_ref = state.get_unchecked(lane);
-        let ptr = lane_ref as *const __m128i as *const u64;
+        #[cfg(target_feature = "sse4.1")]
+        {
+            return SSE::gen_u64_const(lane_ref, idx as i32);
+        }
 
+        let ptr = &lane_ref as *const __m128i as *const u64;
         *ptr.add(idx)
     }
 
@@ -122,10 +126,14 @@ impl Engine<SSE_STATE_LEN> for SSE {
     unsafe fn gen_u32(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u32 {
         // sanity check
         debug_assert!(idx < 4, "Index must be smaller then 4 for SSE state");
+        let lane_ref = *state.get_unchecked(lane);
 
-        let lane_ref = state.get_unchecked(lane);
-        let ptr = lane_ref as *const __m128i as *const u32;
+        #[cfg(target_feature = "sse4.1")]
+        {
+            return SSE::gen_u32_const(lane_ref, idx as i32);
+        }
 
+        let ptr = &lane_ref as *const __m128i as *const u32;
         *ptr.add(idx)
     }
 
@@ -137,8 +145,14 @@ impl Engine<SSE_STATE_LEN> for SSE {
             "Index must be smaller than 8 for SSE lane (128 bits / 16 bits)"
         );
 
-        let lane_ref = state.get_unchecked(lane);
-        let ptr = lane_ref as *const __m128i as *const u16;
+        let lane_ref = *state.get_unchecked(lane);
+
+        #[cfg(target_feature = "sse4.1")]
+        {
+            return SSE::gen_u16_const(lane_ref, idx as i32);
+        }
+
+        let ptr = &lane_ref as *const __m128i as *const u16;
         *ptr.add(idx)
     }
 
@@ -150,8 +164,14 @@ impl Engine<SSE_STATE_LEN> for SSE {
             "Index must be smaller than 16 for SSE lane (128 bits / 8 bits)"
         );
 
-        let lane_ref = state.get_unchecked(lane);
-        let ptr = lane_ref as *const __m128i as *const u8;
+        let lane_ref = *state.get_unchecked(lane);
+
+        #[cfg(target_feature = "sse4.1")]
+        {
+            return SSE::gen_u8_const(lane_ref, idx as i32);
+        }
+
+        let ptr = &lane_ref as *const __m128i as *const u8;
         *ptr.add(idx)
     }
 
@@ -163,9 +183,7 @@ impl Engine<SSE_STATE_LEN> for SSE {
             "Index must be smaller than 16 for SSE lane (128 bits / 8 bits)"
         );
 
-        let lane_ref = state.get_unchecked(lane);
-        let ptr = lane_ref as *const __m128i as *const u8;
-        *ptr.add(idx) & 1 != 0
+        SSE::gen_u8(state, lane, idx) & 1 != 0
     }
 }
 
@@ -174,6 +192,72 @@ impl SSE {
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn get_mask() -> __m128i {
         _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32)
+    }
+
+    #[cfg(target_feature = "sse4.1")]
+    #[inline(always)]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn gen_u64_const(lane_ref: __m128i, idx: i32) -> u64 {
+        match idx {
+            0 => _mm_extract_epi64(lane_ref, 0) as u64,
+            1 => _mm_extract_epi64(lane_ref, 1) as u64,
+            _ => core::hint::unreachable_unchecked(),
+        }
+    }
+
+    #[cfg(target_feature = "sse4.1")]
+    #[inline(always)]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn gen_u32_const(lane_ref: __m128i, idx: i32) -> u32 {
+        match idx {
+            0 => _mm_extract_epi32(lane_ref, 0) as u32,
+            1 => _mm_extract_epi32(lane_ref, 1) as u32,
+            2 => _mm_extract_epi32(lane_ref, 2) as u32,
+            3 => _mm_extract_epi32(lane_ref, 3) as u32,
+            _ => core::hint::unreachable_unchecked(),
+        }
+    }
+
+    #[cfg(target_feature = "sse4.1")]
+    #[inline(always)]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn gen_u16_const(lane_ref: __m128i, idx: i32) -> u16 {
+        match idx {
+            0 => _mm_extract_epi16(lane_ref, 0) as u16,
+            1 => _mm_extract_epi16(lane_ref, 1) as u16,
+            2 => _mm_extract_epi16(lane_ref, 2) as u16,
+            3 => _mm_extract_epi16(lane_ref, 3) as u16,
+            4 => _mm_extract_epi16(lane_ref, 4) as u16,
+            5 => _mm_extract_epi16(lane_ref, 5) as u16,
+            6 => _mm_extract_epi16(lane_ref, 6) as u16,
+            7 => _mm_extract_epi16(lane_ref, 7) as u16,
+            _ => core::hint::unreachable_unchecked(),
+        }
+    }
+
+    #[cfg(target_feature = "sse4.1")]
+    #[inline(always)]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn gen_u8_const(lane_ref: __m128i, idx: i32) -> u8 {
+        match idx {
+            0 => _mm_extract_epi8(lane_ref, 0) as u8,
+            1 => _mm_extract_epi8(lane_ref, 1) as u8,
+            2 => _mm_extract_epi8(lane_ref, 2) as u8,
+            3 => _mm_extract_epi8(lane_ref, 3) as u8,
+            4 => _mm_extract_epi8(lane_ref, 4) as u8,
+            5 => _mm_extract_epi8(lane_ref, 5) as u8,
+            6 => _mm_extract_epi8(lane_ref, 6) as u8,
+            7 => _mm_extract_epi8(lane_ref, 7) as u8,
+            8 => _mm_extract_epi8(lane_ref, 8) as u8,
+            9 => _mm_extract_epi8(lane_ref, 9) as u8,
+            10 => _mm_extract_epi8(lane_ref, 10) as u8,
+            11 => _mm_extract_epi8(lane_ref, 11) as u8,
+            12 => _mm_extract_epi8(lane_ref, 12) as u8,
+            13 => _mm_extract_epi8(lane_ref, 13) as u8,
+            14 => _mm_extract_epi8(lane_ref, 14) as u8,
+            15 => _mm_extract_epi8(lane_ref, 15) as u8,
+            _ => core::hint::unreachable_unchecked(),
+        }
     }
 }
 
