@@ -20,14 +20,193 @@ impl SIMD {
         }
     }
 
-    #[inline(always)]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn regenerate(&mut self) {
+    pub(crate) fn next_u64(&mut self) -> u64 {
         match self {
             #[cfg(target_arch = "x86_64")]
-            Self::Sse(inner) => {}
+            Self::Sse(state) => unsafe { state.gen_64() },
 
             _ => todo!(),
+        }
+    }
+
+    pub(crate) fn next_u32(&mut self) -> u32 {
+        match self {
+            #[cfg(target_arch = "x86_64")]
+            Self::Sse(state) => unsafe { state.gen_32() },
+
+            _ => todo!(),
+        }
+    }
+
+    pub(crate) fn batch_u64(&mut self, buf: &mut [u64]) {
+        match self {
+            #[cfg(target_arch = "x86_64")]
+            Self::Sse(state) => unsafe {
+                self.fill_u64_buf(buf, buf.len());
+            },
+
+            _ => todo!(),
+        }
+    }
+
+    pub(crate) fn batch_u32(&mut self, buf: &mut [u32]) {
+        match self {
+            #[cfg(target_arch = "x86_64")]
+            Self::Sse(state) => unsafe {
+                self.fill_u32_buf(buf, buf.len());
+            },
+
+            _ => todo!(),
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn fill_u64_buf(&mut self, buf: &mut [u64], len: usize) {
+        // edge case
+        if len == 0 {
+            return;
+        }
+
+        const BATCH: usize = SSE_N64;
+        const UNROLL: usize = 4;
+        const CHUNK: usize = BATCH * UNROLL;
+
+        // NOTE: This is valid cause, the funtion is only supposed to be executed/compiled
+        // when `SSE` is available!
+        let state_ref = match self {
+            Self::Sse(s) => s,
+            _ => unreachable!(),
+        };
+
+        let dst = buf.as_mut_ptr();
+
+        // edge case
+        if len < BATCH {
+            let b = state_ref.batch_u64();
+            core::ptr::copy_nonoverlapping(b.as_ptr(), dst, len);
+
+            return;
+        }
+
+        let main_iters = len / CHUNK;
+
+        let mut i = 0usize;
+        let mut iters = main_iters;
+
+        while iters != 0 {
+            let b0 = state_ref.batch_u64();
+            let b1 = state_ref.batch_u64();
+            let b2 = state_ref.batch_u64();
+            let b3 = state_ref.batch_u64();
+
+            core::ptr::copy_nonoverlapping(b0.as_ptr(), dst.add(i), BATCH);
+            i += BATCH;
+
+            core::ptr::copy_nonoverlapping(b1.as_ptr(), dst.add(i), BATCH);
+            i += BATCH;
+
+            core::ptr::copy_nonoverlapping(b2.as_ptr(), dst.add(i), BATCH);
+            i += BATCH;
+
+            core::ptr::copy_nonoverlapping(b3.as_ptr(), dst.add(i), BATCH);
+            i += BATCH;
+
+            iters -= 1;
+        }
+
+        //
+        // slow path (iif buf_len is odd)
+        //
+
+        let remaining = len - (main_iters * CHUNK);
+        let mut rem_written = 0usize;
+
+        while rem_written + BATCH <= remaining {
+            let b = state_ref.batch_u64();
+            core::ptr::copy_nonoverlapping(b.as_ptr(), dst.add(i + rem_written), BATCH);
+
+            rem_written += BATCH;
+        }
+
+        if rem_written < remaining {
+            let b = state_ref.batch_u64();
+            core::ptr::write(dst.add(i + rem_written), b[0]);
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn fill_u32_buf(&mut self, buf: &mut [u32], len: usize) {
+        // edge case
+        if len == 0 {
+            return;
+        }
+
+        const BATCH: usize = SSE_N32;
+        const UNROLL: usize = 4;
+        const CHUNK: usize = BATCH * UNROLL;
+
+        // NOTE: This is valid cause, the funtion is only supposed to be executed/compiled
+        // when `SSE` is available!
+        let state_ref = match self {
+            Self::Sse(s) => s,
+            _ => unreachable!(),
+        };
+
+        let dst = buf.as_mut_ptr();
+
+        // edge case
+        if len < BATCH {
+            let b = state_ref.batch_u32();
+            core::ptr::copy_nonoverlapping(b.as_ptr(), dst, len);
+
+            return;
+        }
+
+        let main_iters = len / CHUNK;
+
+        let mut i = 0usize;
+        let mut iters = main_iters;
+
+        while iters != 0 {
+            let b0 = state_ref.batch_u32();
+            let b1 = state_ref.batch_u32();
+            let b2 = state_ref.batch_u32();
+            let b3 = state_ref.batch_u32();
+
+            core::ptr::copy_nonoverlapping(b0.as_ptr(), dst.add(i), BATCH);
+            i += BATCH;
+
+            core::ptr::copy_nonoverlapping(b1.as_ptr(), dst.add(i), BATCH);
+            i += BATCH;
+
+            core::ptr::copy_nonoverlapping(b2.as_ptr(), dst.add(i), BATCH);
+            i += BATCH;
+
+            core::ptr::copy_nonoverlapping(b3.as_ptr(), dst.add(i), BATCH);
+            i += BATCH;
+
+            iters -= 1;
+        }
+
+        //
+        // slow path (iif buf_len is odd)
+        //
+
+        let remaining = len - (main_iters * CHUNK);
+        let mut rem_written = 0usize;
+
+        while rem_written + BATCH <= remaining {
+            let b = state_ref.batch_u32();
+            core::ptr::copy_nonoverlapping(b.as_ptr(), dst.add(i + rem_written), BATCH);
+
+            rem_written += BATCH;
+        }
+
+        if rem_written < remaining {
+            let b = state_ref.batch_u32();
+            core::ptr::write(dst.add(i + rem_written), b[0]);
         }
     }
 }
