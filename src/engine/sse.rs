@@ -149,8 +149,9 @@ impl Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
         debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
 
         let mut buf = [0u64; SSE_N64];
-        let lane_ref = *state.get_unchecked(lane);
-        _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, lane_ref);
+        let lane_ref = state.get_unchecked(lane);
+
+        _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, *lane_ref);
 
         buf
     }
@@ -162,8 +163,9 @@ impl Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
         debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
 
         let mut buf = [0u32; SSE_N32];
-        let lane_ref = *state.get_unchecked(lane);
-        _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, lane_ref);
+        let lane_ref = state.get_unchecked(lane);
+
+        _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, *lane_ref);
 
         buf
     }
