@@ -14,6 +14,9 @@ pub(crate) trait Engine<const N: usize> {
     unsafe fn gen_u16(state: &[Self::Lane; N], lane: usize, idx: usize) -> u16;
     unsafe fn gen_u8(state: &[Self::Lane; N], lane: usize, idx: usize) -> u8;
     unsafe fn gen_bool(state: &[Self::Lane; N], lane: usize, idx: usize) -> bool;
+
+    unsafe fn gen_u64_batch<const S: usize>(state: &[Self::Lane; N], lane: usize) -> [u64; S];
+    unsafe fn gen_u32_batch<const S: usize>(state: &[Self::Lane; N], lane: usize) -> [u32; S];
 }
 
 #[inline(always)]
