@@ -1,3 +1,5 @@
+use simd::platform_seed;
+
 mod engine;
 mod simd;
 mod state;
@@ -8,10 +10,16 @@ pub struct Sphur {
 
 impl Sphur {
     #[inline(always)]
-    pub fn new(seed: u64) -> Self {
+    pub fn new_seeded(seed: u64) -> Self {
         Self {
             simd: crate::simd::SIMD::new(seed),
         }
+    }
+
+    #[inline(always)]
+    pub fn new() -> Self {
+        let seed = platform_seed();
+        Sphur::new_seeded(seed)
     }
 
     #[inline(always)]
