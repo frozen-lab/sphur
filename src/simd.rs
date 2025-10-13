@@ -45,7 +45,9 @@ impl SIMD {
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[allow(unused)]
 enum ISA {
-    // SSE2 is used as default for all x86_64 CPU's
+    // SSE is used as default for all x86_64 CPU's
+    //
+    // NOTE: We upgrade to SSSE3, SSE4.1, etc. as per availabilty at runtime
     #[cfg(target_arch = "x86_64")]
     SSE,
 

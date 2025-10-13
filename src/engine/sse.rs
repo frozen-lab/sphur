@@ -114,8 +114,7 @@ impl Engine<SSE_STATE_LEN> for SSE {
 
         let lane_ref = *state.get_unchecked(lane);
 
-        #[cfg(target_feature = "sse4.1")]
-        {
+        if std::is_x86_feature_detected!("sse4.1") {
             return SSE::gen_u64_const(lane_ref, idx as i32);
         }
 
@@ -132,8 +131,7 @@ impl Engine<SSE_STATE_LEN> for SSE {
 
         let lane_ref = *state.get_unchecked(lane);
 
-        #[cfg(target_feature = "sse4.1")]
-        {
+        if std::is_x86_feature_detected!("ssse3") {
             return SSE::gen_u32_const(lane_ref, idx as i32);
         }
 
@@ -153,8 +151,7 @@ impl Engine<SSE_STATE_LEN> for SSE {
 
         let lane_ref = *state.get_unchecked(lane);
 
-        #[cfg(target_feature = "sse4.1")]
-        {
+        if std::is_x86_feature_detected!("sse4.1") {
             return SSE::gen_u16_const(lane_ref, idx as i32);
         }
 
@@ -174,8 +171,7 @@ impl Engine<SSE_STATE_LEN> for SSE {
 
         let lane_ref = *state.get_unchecked(lane);
 
-        #[cfg(target_feature = "sse4.1")]
-        {
+        if std::is_x86_feature_detected!("sse4.1") {
             return SSE::gen_u8_const(lane_ref, idx as i32);
         }
 
@@ -363,8 +359,7 @@ unsafe fn sr_128_lane(x: __m128i) -> __m128i {
     let part1 = _mm_srli_epi32(x, SR2);
 
     // cross lane carry
-    #[cfg(target_feature = "ssse3")]
-    {
+    if std::is_x86_feature_detected!("ssse3") {
         let shifted_bytes = _mm_alignr_epi8(x, x, SR2 / 8);
         let part2 = _mm_slli_epi32(shifted_bytes, 32 - SR2);
 
@@ -397,8 +392,7 @@ unsafe fn sl_128_lane(x: __m128i) -> __m128i {
     let part1 = _mm_slli_epi32(x, SL2);
 
     // cross lane carry
-    #[cfg(target_feature = "ssse3")]
-    {
+    if std::is_x86_feature_detected!("ssse3") {
         let shifted_bytes = _mm_alignr_epi8(x, x, 16 - (SL2 / 8));
         let part2 = _mm_srli_epi32(shifted_bytes, 32 - SL2);
 
