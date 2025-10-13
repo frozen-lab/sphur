@@ -13,7 +13,7 @@ impl SIMD {
     pub(crate) fn new(seed: u64) -> Self {
         match ISA::detect_isa() {
             #[cfg(target_arch = "x86_64")]
-            ISA::SSE => Self::Sse(State::<SSE, SSE_STATE_LEN>::new(seed)),
+            ISA::SSE => unsafe { Self::Sse(State::<SSE, SSE_STATE_LEN>::new(seed)) },
 
             #[cfg(target_arch = "aarch64")]
             ISA::NEON => todo!(),
@@ -21,21 +21,11 @@ impl SIMD {
     }
 
     #[inline(always)]
-    pub(crate) fn block_size(&self) -> usize {
-        match self {
-            #[cfg(target_arch = "x86_64")]
-            Self::Sse(_) => SSE_STATE_LEN,
-
-            _ => todo!(),
-        }
-    }
-
-    #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
-    pub(crate) unsafe fn regenerate(&mut self) {
+    unsafe fn regenerate(&mut self) {
         match self {
             #[cfg(target_arch = "x86_64")]
-            Self::Sse(inner) => inner.regenerate(),
+            Self::Sse(inner) => {}
 
             _ => todo!(),
         }
@@ -43,7 +33,6 @@ impl SIMD {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-#[allow(unused)]
 enum ISA {
     // SSE is used as default for all x86_64 CPU's
     //
