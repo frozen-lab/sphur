@@ -49,13 +49,13 @@ jobs:
         if: matrix.arch == 'aarch64'
         run: cargo test --release -- --nocapture
 
-      - name: Test x86_64 (SSE2)
+      - name: Test x86_64 (SSE)
         if: matrix.arch == 'x86_64' && runner.os != 'Windows'
-        run: RUSTFLAGS="-C target-feature=+sse2" cargo test --release -- --nocapture
+        run: RUSTFLAGS="-C target-feature=+sse2,+ssse3,+sse4.1,+sse4.2" cargo test --release -- --nocapture
 
-      - name: Test x86_64 (SSE2) [WIN]
+      - name: Test x86_64 (SSE) [WIN]
         if: matrix.arch == 'x86_64' && contains(matrix.os, 'windows')
         shell: pwsh
         env:
-          RUSTFLAGS: "-C target-feature=+sse2"
+          RUSTFLAGS: "-C target-feature=+sse2,+ssse3,+sse4.1,+sse4.2"
         run: cargo test --release -- --nocapture
