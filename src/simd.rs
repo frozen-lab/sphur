@@ -24,6 +24,9 @@ impl SIMD {
         match self {
             #[cfg(target_arch = "x86_64")]
             Self::Sse(state) => unsafe { state.gen_64() },
+
+            #[cfg(target_arch = "aarch64")]
+            _ => todo!(),
         }
     }
 
@@ -31,6 +34,9 @@ impl SIMD {
         match self {
             #[cfg(target_arch = "x86_64")]
             Self::Sse(state) => unsafe { state.gen_32() },
+
+            #[cfg(target_arch = "aarch64")]
+            _ => todo!(),
         }
     }
 
@@ -40,6 +46,9 @@ impl SIMD {
             Self::Sse(_) => unsafe {
                 self.fill_u64_buf(buf, buf.len());
             },
+
+            #[cfg(target_arch = "aarch64")]
+            _ => todo!(),
         }
     }
 
@@ -49,6 +58,9 @@ impl SIMD {
             Self::Sse(_) => unsafe {
                 self.fill_u32_buf(buf, buf.len());
             },
+
+            #[cfg(target_arch = "aarch64")]
+            _ => todo!(),
         }
     }
 
@@ -232,6 +244,25 @@ impl ISA {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod isa_tests {
+        use super::*;
+
+        #[test]
+        fn test_sanity_check_for_isa_detection_for_correctness_check() {
+            let isa = ISA::detect_isa();
+
+            #[cfg(target_arch = "x86_64")]
+            match isa {
+                ISA::SSE => {}
+            }
+
+            #[cfg(target_arch = "aarch64")]
+            match isa {
+                ISA::NEON => {}
+            }
+        }
+    }
 
     #[cfg(target_arch = "x86_64")]
     mod sse {
