@@ -24,8 +24,6 @@ impl SIMD {
         match self {
             #[cfg(target_arch = "x86_64")]
             Self::Sse(state) => unsafe { state.gen_64() },
-
-            _ => todo!(),
         }
     }
 
@@ -33,30 +31,24 @@ impl SIMD {
         match self {
             #[cfg(target_arch = "x86_64")]
             Self::Sse(state) => unsafe { state.gen_32() },
-
-            _ => todo!(),
         }
     }
 
     pub(crate) fn batch_u64(&mut self, buf: &mut [u64]) {
         match self {
             #[cfg(target_arch = "x86_64")]
-            Self::Sse(state) => unsafe {
+            Self::Sse(_) => unsafe {
                 self.fill_u64_buf(buf, buf.len());
             },
-
-            _ => todo!(),
         }
     }
 
     pub(crate) fn batch_u32(&mut self, buf: &mut [u32]) {
         match self {
             #[cfg(target_arch = "x86_64")]
-            Self::Sse(state) => unsafe {
+            Self::Sse(_) => unsafe {
                 self.fill_u32_buf(buf, buf.len());
             },
-
-            _ => todo!(),
         }
     }
 
@@ -76,7 +68,6 @@ impl SIMD {
         // when `SSE` is available!
         let state_ref = match self {
             Self::Sse(s) => s,
-            _ => unreachable!(),
         };
 
         let dst = buf.as_mut_ptr();
@@ -151,7 +142,6 @@ impl SIMD {
         // when `SSE` is available!
         let state_ref = match self {
             Self::Sse(s) => s,
-            _ => unreachable!(),
         };
 
         let dst = buf.as_mut_ptr();
@@ -246,7 +236,6 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     mod sse {
         use super::*;
-        use core::mem;
 
         #[test]
         fn test_next_u64_and_u32_basic() {

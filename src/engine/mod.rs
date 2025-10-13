@@ -9,9 +9,6 @@ pub(crate) trait Engine<const N: usize, const N64: usize, const N32: usize> {
     unsafe fn new(seed: u64) -> [Self::Lane; N];
     unsafe fn regen(state: &mut [Self::Lane; N]);
 
-    unsafe fn next_u64(state: &[Self::Lane; N], lane: usize, idx: usize) -> u64;
-    unsafe fn next_u32(state: &[Self::Lane; N], lane: usize, idx: usize) -> u32;
-
     unsafe fn batch_u64(state: &[Self::Lane; N], lane: usize) -> [u64; N64];
     unsafe fn batch_u32(state: &[Self::Lane; N], lane: usize) -> [u32; N32];
 }

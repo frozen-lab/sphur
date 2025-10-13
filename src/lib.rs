@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 mod engine;
 mod simd;
 mod state;
@@ -17,7 +15,22 @@ impl Sphur {
     }
 
     #[inline(always)]
-    pub fn gen_u64(&mut self) -> u64 {
-        todo!()
+    pub fn next_u64(&mut self) -> u64 {
+        self.simd.next_u64()
+    }
+
+    #[inline(always)]
+    pub fn next_u32(&mut self) -> u32 {
+        self.simd.next_u32()
+    }
+
+    #[inline(always)]
+    pub fn batch_u64(&mut self, buf: &mut [u64]) {
+        self.simd.batch_u64(buf)
+    }
+
+    #[inline(always)]
+    pub fn batch_u32(&mut self, buf: &mut [u32]) {
+        self.simd.batch_u32(buf)
     }
 }

@@ -110,40 +110,6 @@ impl Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
 
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn next_u64(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u64 {
-        // sanity check
-        debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
-        debug_assert!(idx < 2, "Index must be smaller than 2 for SSE lane");
-
-        let lane_ref = *state.get_unchecked(lane);
-
-        if std::is_x86_feature_detected!("sse4.1") {
-            return SSE::gen_u64_const(lane_ref, idx as i32);
-        }
-
-        let ptr = &lane_ref as *const __m128i as *const u64;
-        *ptr.add(idx)
-    }
-
-    #[inline(always)]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn next_u32(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u32 {
-        // sanity check
-        debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
-        debug_assert!(idx < 4, "Index must be smaller then 4 for SSE state");
-
-        let lane_ref = *state.get_unchecked(lane);
-
-        if std::is_x86_feature_detected!("ssse3") {
-            return SSE::gen_u32_const(lane_ref, idx as i32);
-        }
-
-        let ptr = &lane_ref as *const __m128i as *const u32;
-        *ptr.add(idx)
-    }
-
-    #[inline(always)]
-    #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn batch_u64(state: &[Self::Lane; SSE_STATE_LEN], lane: usize) -> [u64; SSE_N64] {
         // sanity check
         debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
@@ -176,30 +142,6 @@ impl SSE {
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn get_mask() -> __m128i {
         _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32)
-    }
-
-    #[cfg(target_feature = "sse4.1")]
-    #[inline(always)]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_u64_const(lane_ref: __m128i, idx: i32) -> u64 {
-        match idx {
-            0 => _mm_extract_epi64(lane_ref, 0) as u64,
-            1 => _mm_extract_epi64(lane_ref, 1) as u64,
-            _ => core::hint::unreachable_unchecked(),
-        }
-    }
-
-    #[cfg(target_feature = "sse4.1")]
-    #[inline(always)]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_u32_const(lane_ref: __m128i, idx: i32) -> u32 {
-        match idx {
-            0 => _mm_extract_epi32(lane_ref, 0) as u32,
-            1 => _mm_extract_epi32(lane_ref, 1) as u32,
-            2 => _mm_extract_epi32(lane_ref, 2) as u32,
-            3 => _mm_extract_epi32(lane_ref, 3) as u32,
-            _ => core::hint::unreachable_unchecked(),
-        }
     }
 }
 
@@ -454,7 +396,7 @@ mod sse_tests {
         #[test]
         fn test_state_alignment_safe() {
             unsafe {
-                let mut state = [_mm_setzero_si128(); SSE_STATE_LEN];
+                let state = [_mm_setzero_si128(); SSE_STATE_LEN];
                 let ptr = state.as_ptr();
 
                 assert_eq!(ptr.align_offset(16), 0, "state must be 16-byte aligned");
@@ -464,43 +406,6 @@ mod sse_tests {
 
     mod gen_functions {
         use super::*;
-
-        #[test]
-        fn test_gen_u32_u64_basic() {
-            unsafe {
-                let mut state = [_mm_set1_epi8(0xAAu8 as i8); SSE_STATE_LEN];
-
-                // u32
-                let mut lane = _mm_set_epi32(0x11223344, 0x55667788, 0x99AABBCCu32 as i32, 0xDDEEFF00u32 as i32);
-                state[0] = lane;
-
-                assert_eq!(SSE::next_u32(&state, 0, 0), 0xDDEEFF00);
-                assert_eq!(SSE::next_u32(&state, 0, 1), 0x99AABBCC);
-                assert_eq!(SSE::next_u32(&state, 0, 2), 0x55667788);
-                assert_eq!(SSE::next_u32(&state, 0, 3), 0x11223344);
-
-                // u64
-                lane = _mm_set_epi64x(0xAABBCCDDEEFF0011u64 as i64, 0x1122334455667788);
-                state[0] = lane;
-                assert_eq!(SSE::next_u64(&state, 0, 0), 0x1122334455667788);
-                assert_eq!(SSE::next_u64(&state, 0, 1), 0xAABBCCDDEEFF0011);
-            }
-        }
-
-        #[test]
-        fn test_gen_consistency_across_calls() {
-            unsafe {
-                let state = [_mm_set_epi32(1, 2, 3, 4); SSE_STATE_LEN];
-
-                let v1 = SSE::next_u32(&state, 0, 0);
-                let v2 = SSE::next_u32(&state, 0, 0);
-                assert_eq!(v1, v2);
-
-                let v3 = SSE::next_u64(&state, 0, 0);
-                let v4 = SSE::next_u64(&state, 0, 0);
-                assert_eq!(v3, v4);
-            }
-        }
 
         #[test]
         fn test_gen_u64_batch() {
