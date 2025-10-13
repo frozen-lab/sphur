@@ -4,6 +4,7 @@ use super::Engine;
 use core::arch::x86_64::*;
 
 pub(crate) const SSE_STATE_LEN: usize = 156;
+const _: () = debug_assert!(SSE_STATE_LEN % 2 == 0);
 
 const SR1: i32 = 11;
 const SL1: i32 = 18;
@@ -30,17 +31,77 @@ impl Engine<SSE_STATE_LEN> for SSE {
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn regen(state: &mut [Self::Lane; SSE_STATE_LEN]) {
-        for i in 0..SSE_STATE_LEN {
-            let b_idx = (i + POS1) % SSE_STATE_LEN;
-            let c_idx = (i + SSE_STATE_LEN - 2) % SSE_STATE_LEN;
-            let d_idx = (i + SSE_STATE_LEN - 1) % SSE_STATE_LEN;
+        let mask = Self::get_mask();
+        let n = SSE_STATE_LEN;
 
-            let a = state[i];
-            let b = state[b_idx];
-            let c = state[c_idx];
-            let d = state[d_idx];
+        let mut i0 = 0usize;
 
-            state[i] = recurrence_relation(a, b, c, d);
+        while i0 + 1 < n {
+            //
+            // compute for lane `i`
+            //
+
+            let mut b0 = i0 + POS1;
+            if b0 >= n {
+                b0 -= n;
+            }
+
+            let mut c0 = i0 + n - 2;
+            if c0 >= n {
+                c0 -= n;
+            }
+
+            let mut d0 = i0 + n - 1;
+            if d0 >= n {
+                d0 -= n;
+            }
+
+            //
+            // compute for lane `i + 1`
+            //
+
+            let i1 = i0 + 1;
+            let mut b1 = i1 + POS1;
+
+            if b1 >= n {
+                b1 -= n;
+            }
+
+            let mut c1 = i1 + n - 2;
+            if c1 >= n {
+                c1 -= n;
+            }
+
+            let mut d1 = i1 + n - 1;
+            if d1 >= n {
+                d1 -= n;
+            }
+
+            //
+            // load lane `i`
+            //
+
+            let a_0 = *state.get_unchecked(i0);
+            let b_0 = *state.get_unchecked(b0);
+            let c_0 = *state.get_unchecked(c0);
+            let d_0 = *state.get_unchecked(d0);
+
+            //
+            // load lane `i + 1`
+            //
+
+            let a_1 = *state.get_unchecked(i1);
+            let b_1 = *state.get_unchecked(b1);
+            let c_1 = *state.get_unchecked(c1);
+            let d_1 = *state.get_unchecked(d1);
+
+            let out0 = recurrence_relation(a_0, b_0, c_0, d_0, mask);
+            let out1 = recurrence_relation(a_1, b_1, c_1, d_1, mask);
+
+            *state.get_unchecked_mut(i0) = out0;
+            *state.get_unchecked_mut(i1) = out1;
+
+            i0 += 2;
         }
     }
 
@@ -108,6 +169,14 @@ impl Engine<SSE_STATE_LEN> for SSE {
     }
 }
 
+impl SSE {
+    #[inline(always)]
+    #[allow(unsafe_op_in_unsafe_fn)]
+    unsafe fn get_mask() -> __m128i {
+        _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32)
+    }
+}
+
 #[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
 /// Performs SFMT recurrence relation
@@ -122,18 +191,33 @@ impl Engine<SSE_STATE_LEN> for SSE {
 ///
 /// out = a ^ w ^ x ^ y ^ z
 /// ```
-unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) -> __m128i {
-    let mask: __m128i = _mm_set_epi32(MSK[3] as i32, MSK[2] as i32, MSK[1] as i32, MSK[0] as i32);
-
+///
+/// ## ILP
+///
+/// Rather then chaining together, we compute indep pieces, for ILP
+///
+/// ```md
+/// t0 = a ^ (a << SL1)
+/// by = (b >> SR1) & mask
+/// t1 = sr128lane(c) ^ sl128lane(d)
+///
+/// (finally) out = t0 ^ by ^ t1
+/// ```
+unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i, mask: __m128i) -> __m128i {
+    // t0 = a ^ (a << SL1)
     let ax = _mm_slli_epi32(a, SL1 as i32);
+    let t0 = _mm_xor_si128(a, ax);
+
+    // by = elem's shift + mask
     let by = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), mask);
+
+    // t1 = combine c and d shifts
     let c_sr2 = sr_128_lane(c);
     let d_sl2 = sl_128_lane(d);
+    let t1 = _mm_xor_si128(c_sr2, d_sl2);
 
-    let mut r = _mm_xor_si128(a, ax);
-    r = _mm_xor_si128(r, by);
-    r = _mm_xor_si128(r, c_sr2);
-    _mm_xor_si128(r, d_sl2)
+    // out = ((a ^ ax) ^ by) ^ (c_sr2 ^ d_sl2)
+    _mm_xor_si128(t0, _mm_xor_si128(by, t1))
 }
 
 #[inline(always)]
@@ -153,22 +237,14 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
 ///
 /// ```
 unsafe fn sr_128_lane(x: __m128i) -> __m128i {
-    // base pre elem
+    // pre elem right shift
     let part1 = _mm_srli_epi32(x, SR2);
 
+    // cross lane carry
     #[cfg(target_feature = "ssse3")]
     {
         let shifted_bytes = _mm_alignr_epi8(x, x, SR2 / 8);
         let part2 = _mm_slli_epi32(shifted_bytes, 32 - SR2);
-
-        #[cfg(target_feature = "sse4.1")]
-        {
-            // NOTE: W/ SSE4.1 we could use blendv instead of OR for
-            // finer merges
-
-            let mask = _mm_set1_epi32(-1);
-            return _mm_blendv_epi8(part1, part2, mask);
-        }
 
         return _mm_or_si128(part1, part2);
     }
@@ -195,7 +271,18 @@ unsafe fn sr_128_lane(x: __m128i) -> __m128i {
 /// out => | A1 A2 A3 B0 | B1 B2 B3 C0 | C1 C2 C3 D0 | D1 D2 D3 00 |
 /// ```
 unsafe fn sl_128_lane(x: __m128i) -> __m128i {
+    // pre elem right shift
     let part1 = _mm_slli_epi32(x, SL2);
+
+    // cross lane carry
+    #[cfg(target_feature = "ssse3")]
+    {
+        let shifted_bytes = _mm_alignr_epi8(x, x, 16 - (SL2 / 8));
+        let part2 = _mm_srli_epi32(shifted_bytes, 32 - SL2);
+
+        return _mm_or_si128(part1, part2);
+    }
+
     let tmp = _mm_slli_si128(x, 4);
     let part2 = _mm_srli_epi32(tmp, 32 - SL2);
 
@@ -239,13 +326,15 @@ mod sse_tests {
         #[test]
         fn test_recurrence_relation_stability() {
             unsafe {
+                let mask = SSE::get_mask();
+
                 let a = _mm_set1_epi32(0xdeadbeefu32 as i32);
                 let b = _mm_set1_epi32(0x12345678);
                 let c = _mm_set1_epi32(0x0badf00d);
                 let d = _mm_set1_epi32(0x9abcdef0u32 as i32);
 
-                let r1 = recurrence_relation(a, b, c, d);
-                let r2 = recurrence_relation(a, b, c, d);
+                let r1 = recurrence_relation(a, b, c, d, mask);
+                let r2 = recurrence_relation(a, b, c, d, mask);
 
                 let mut buf1 = [0u32; 4];
                 let mut buf2 = [0u32; 4];
@@ -264,6 +353,7 @@ mod sse_tests {
         #[test]
         fn test_gen_state_runs() {
             unsafe {
+                let mask = SSE::get_mask();
                 let mut state = [_mm_set1_epi32(0x12345678u32 as i32); SSE_STATE_LEN];
 
                 for i in 0..SSE_STATE_LEN {
@@ -272,7 +362,7 @@ mod sse_tests {
                     let c = state[(i + SSE_STATE_LEN - 2) % SSE_STATE_LEN];
                     let d = state[(i + SSE_STATE_LEN - 1) % SSE_STATE_LEN];
 
-                    state[i] = recurrence_relation(a, b, c, d);
+                    state[i] = recurrence_relation(a, b, c, d, mask);
                 }
 
                 // sanity check
@@ -296,6 +386,7 @@ mod sse_tests {
         #[test]
         fn test_recurrence_diverges_with_different_seed() {
             unsafe {
+                let mask = SSE::get_mask();
                 let mut s1 = [_mm_set1_epi32(0xAAAAAAAAu32 as i32); SSE_STATE_LEN];
                 let mut s2 = [_mm_set1_epi32(0xAAAAAAABu32 as i32); SSE_STATE_LEN];
 
@@ -314,8 +405,8 @@ mod sse_tests {
                         s2[(i + SSE_STATE_LEN - 1) % SSE_STATE_LEN],
                     );
 
-                    s1[i] = recurrence_relation(a1, b1, c1, d1);
-                    s2[i] = recurrence_relation(a2, b2, c2, d2);
+                    s1[i] = recurrence_relation(a1, b1, c1, d1, mask);
+                    s2[i] = recurrence_relation(a2, b2, c2, d2, mask);
                 }
 
                 let mut equal_count = 0;
