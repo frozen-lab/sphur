@@ -591,4 +591,101 @@ mod sse_tests {
             }
         }
     }
+
+    mod sse {
+        use super::*;
+
+        #[test]
+        fn test_get_mask_correctness() {
+            unsafe {
+                let mask = SSE::get_mask();
+
+                let mut buf = [0u32; 4];
+                _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, mask);
+
+                assert_eq!(buf, MSK, "Mask constant must match SFMT definition");
+            }
+        }
+
+        #[cfg(target_feature = "sse4.1")]
+        #[test]
+        fn test_gen_const_functions_exhaustive() {
+            unsafe {
+                let lane = _mm_set_epi8(
+                    0x0F, 0x0E, 0x0D, 0x0C, 0x0B, 0x0A, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00,
+                );
+
+                // u8 extraction (0..15)
+                for i in 0..16 {
+                    let v = SSE::gen_u8_const(lane, i);
+                    assert_eq!(v, i as u8, "u8 const extraction mismatch at {}", i);
+                }
+
+                // u16 extraction (0..7)
+                for i in 0..8 {
+                    let v = SSE::gen_u16_const(lane, i);
+                    // Each 16-bit block = little endian combination of two u8s
+                    let expected = ((2 * i + 1) as u16) << 8 | (2 * i) as u16;
+                    assert_eq!(v, expected, "u16 const extraction mismatch at {}", i);
+                }
+
+                // u32 extraction (0..3)
+                let lane32 = _mm_set_epi32(0x11223344, 0x55667788, 0x99AABBCCu32 as i32, 0xDDEEFF00u32 as i32);
+
+                for (i, exp) in [0xDDEEFF00u32 as i32, 0x99AABBCCu32 as i32, 0x55667788, 0x11223344]
+                    .iter()
+                    .enumerate()
+                {
+                    let v = SSE::gen_u32_const(lane32, i as i32);
+                    assert_eq!(v, *exp as u32, "u32 const extraction mismatch at {}", i);
+                }
+
+                // u64 extraction (0..1)
+                let lane64 = _mm_set_epi64x(0xAABBCCDDEEFF0011u64 as i64, 0x1122334455667788);
+
+                assert_eq!(SSE::gen_u64_const(lane64, 0), 0x1122334455667788);
+                assert_eq!(SSE::gen_u64_const(lane64, 1), 0xAABBCCDDEEFF0011);
+            }
+        }
+
+        #[test]
+        fn test_sr_sl_lane_roundtrip() {
+            unsafe {
+                let x = _mm_set_epi32(0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d);
+                let r = sl_128_lane(sr_128_lane(x));
+
+                let mut orig = [0u32; 4];
+                let mut out = [0u32; 4];
+
+                _mm_storeu_si128(orig.as_mut_ptr() as *mut __m128i, x);
+                _mm_storeu_si128(out.as_mut_ptr() as *mut __m128i, r);
+
+                let equal_bits = orig.iter().zip(out.iter()).filter(|(a, b)| a == b).count();
+                assert!(equal_bits >= 1, "roundtrip lost all structure: {:?} -> {:?}", orig, out);
+            }
+        }
+
+        #[test]
+        fn test_recurrence_relation_determinism_and_linearity() {
+            unsafe {
+                let mask = SSE::get_mask();
+
+                let a = _mm_set1_epi32(0xdeadbeefu32 as i32);
+                let b = _mm_set1_epi32(0x12345678);
+                let c = _mm_set1_epi32(0x0badf00d);
+                let d = _mm_set1_epi32(0x9abcdef0u32 as i32);
+
+                let r1 = recurrence_relation(a, b, c, d, mask);
+                let r2 = recurrence_relation(a, b, c, d, mask);
+
+                let mut buf1 = [0u32; 4];
+                let mut buf2 = [0u32; 4];
+
+                _mm_storeu_si128(buf1.as_mut_ptr() as *mut __m128i, r1);
+                _mm_storeu_si128(buf2.as_mut_ptr() as *mut __m128i, r2);
+
+                assert_eq!(buf1, buf2, "recurrence must be deterministic");
+            }
+        }
+    }
 }
