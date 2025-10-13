@@ -1,11 +1,11 @@
 use crate::state::State;
 
 #[cfg(target_arch = "x86_64")]
-use crate::engine::sse::{SSE, SSE_STATE_LEN};
+use crate::engine::sse::{SSE, SSE_N32, SSE_N64, SSE_STATE_LEN};
 
 pub(crate) enum SIMD {
     #[cfg(target_arch = "x86_64")]
-    Sse(State<SSE, SSE_STATE_LEN>),
+    Sse(State<SSE, SSE_STATE_LEN, SSE_N64, SSE_N32>),
 }
 
 impl SIMD {
@@ -13,7 +13,7 @@ impl SIMD {
     pub(crate) fn new(seed: u64) -> Self {
         match ISA::detect_isa() {
             #[cfg(target_arch = "x86_64")]
-            ISA::SSE => unsafe { Self::Sse(State::<SSE, SSE_STATE_LEN>::new(seed)) },
+            ISA::SSE => unsafe { Self::Sse(State::<SSE, SSE_STATE_LEN, SSE_N64, SSE_N32>::new(seed)) },
 
             #[cfg(target_arch = "aarch64")]
             ISA::NEON => todo!(),

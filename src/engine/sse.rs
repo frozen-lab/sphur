@@ -4,6 +4,9 @@ use super::Engine;
 use core::arch::x86_64::*;
 
 pub(crate) const SSE_STATE_LEN: usize = 156;
+pub(crate) const SSE_N64: usize = 2;
+pub(crate) const SSE_N32: usize = 4;
+
 const _: () = assert!(SSE_STATE_LEN % 2 == 0);
 
 const SR1: i32 = 11;
@@ -17,7 +20,7 @@ const MSK: [u32; 4] = [0xdfffffefu32, 0xddfecb7fu32, 0xbffaffffu32, 0xbffffff6u3
 
 pub(crate) struct SSE;
 
-impl Engine<SSE_STATE_LEN> for SSE {
+impl Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
     type Lane = __m128i;
 
     #[inline(always)]
@@ -107,7 +110,7 @@ impl Engine<SSE_STATE_LEN> for SSE {
 
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_u64(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u64 {
+    unsafe fn next_u64(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u64 {
         // sanity check
         debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
         debug_assert!(idx < 2, "Index must be smaller than 2 for SSE lane");
@@ -124,7 +127,7 @@ impl Engine<SSE_STATE_LEN> for SSE {
 
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_u32(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u32 {
+    unsafe fn next_u32(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u32 {
         // sanity check
         debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
         debug_assert!(idx < 4, "Index must be smaller then 4 for SSE state");
@@ -141,65 +144,11 @@ impl Engine<SSE_STATE_LEN> for SSE {
 
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_u16(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u16 {
+    unsafe fn batch_u64(state: &[Self::Lane; SSE_STATE_LEN], lane: usize) -> [u64; SSE_N64] {
         // sanity check
         debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
-        debug_assert!(
-            idx < 8,
-            "Index must be smaller than 8 for SSE lane (128 bits / 16 bits)"
-        );
 
-        let lane_ref = *state.get_unchecked(lane);
-
-        if std::is_x86_feature_detected!("sse4.1") {
-            return SSE::gen_u16_const(lane_ref, idx as i32);
-        }
-
-        let ptr = &lane_ref as *const __m128i as *const u16;
-        *ptr.add(idx)
-    }
-
-    #[inline(always)]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_u8(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> u8 {
-        // sanity check
-        debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
-        debug_assert!(
-            idx < 16,
-            "Index must be smaller than 16 for SSE lane (128 bits / 8 bits)"
-        );
-
-        let lane_ref = *state.get_unchecked(lane);
-
-        if std::is_x86_feature_detected!("sse4.1") {
-            return SSE::gen_u8_const(lane_ref, idx as i32);
-        }
-
-        let ptr = &lane_ref as *const __m128i as *const u8;
-        *ptr.add(idx)
-    }
-
-    #[inline(always)]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_bool(state: &[Self::Lane; SSE_STATE_LEN], lane: usize, idx: usize) -> bool {
-        // sanity check
-        debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
-        debug_assert!(
-            idx < 16,
-            "Index must be smaller than 16 for SSE lane (128 bits / 8 bits)"
-        );
-
-        SSE::gen_u8(state, lane, idx) & 1 != 0
-    }
-
-    #[inline(always)]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_u64_batch<const S: usize>(state: &[Self::Lane; SSE_STATE_LEN], lane: usize) -> [u64; S] {
-        // sanity check
-        debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
-        debug_assert!(S == 2, "Only 2 u64's can be generated on SSE");
-
-        let mut buf = [0u64; S];
+        let mut buf = [0u64; SSE_N64];
         let lane_ref = *state.get_unchecked(lane);
         _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, lane_ref);
 
@@ -208,12 +157,11 @@ impl Engine<SSE_STATE_LEN> for SSE {
 
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_u32_batch<const S: usize>(state: &[Self::Lane; SSE_STATE_LEN], lane: usize) -> [u32; S] {
+    unsafe fn batch_u32(state: &[Self::Lane; SSE_STATE_LEN], lane: usize) -> [u32; SSE_N32] {
         // sanity check
         debug_assert!(lane < SSE_STATE_LEN, "Lane must be in bounds with the state size");
-        debug_assert!(S == 4, "Only 4 u32's can be generated on SSE");
 
-        let mut buf = [0u32; S];
+        let mut buf = [0u32; SSE_N32];
         let lane_ref = *state.get_unchecked(lane);
         _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, lane_ref);
 
@@ -248,48 +196,6 @@ impl SSE {
             1 => _mm_extract_epi32(lane_ref, 1) as u32,
             2 => _mm_extract_epi32(lane_ref, 2) as u32,
             3 => _mm_extract_epi32(lane_ref, 3) as u32,
-            _ => core::hint::unreachable_unchecked(),
-        }
-    }
-
-    #[cfg(target_feature = "sse4.1")]
-    #[inline(always)]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_u16_const(lane_ref: __m128i, idx: i32) -> u16 {
-        match idx {
-            0 => _mm_extract_epi16(lane_ref, 0) as u16,
-            1 => _mm_extract_epi16(lane_ref, 1) as u16,
-            2 => _mm_extract_epi16(lane_ref, 2) as u16,
-            3 => _mm_extract_epi16(lane_ref, 3) as u16,
-            4 => _mm_extract_epi16(lane_ref, 4) as u16,
-            5 => _mm_extract_epi16(lane_ref, 5) as u16,
-            6 => _mm_extract_epi16(lane_ref, 6) as u16,
-            7 => _mm_extract_epi16(lane_ref, 7) as u16,
-            _ => core::hint::unreachable_unchecked(),
-        }
-    }
-
-    #[cfg(target_feature = "sse4.1")]
-    #[inline(always)]
-    #[allow(unsafe_op_in_unsafe_fn)]
-    unsafe fn gen_u8_const(lane_ref: __m128i, idx: i32) -> u8 {
-        match idx {
-            0 => _mm_extract_epi8(lane_ref, 0) as u8,
-            1 => _mm_extract_epi8(lane_ref, 1) as u8,
-            2 => _mm_extract_epi8(lane_ref, 2) as u8,
-            3 => _mm_extract_epi8(lane_ref, 3) as u8,
-            4 => _mm_extract_epi8(lane_ref, 4) as u8,
-            5 => _mm_extract_epi8(lane_ref, 5) as u8,
-            6 => _mm_extract_epi8(lane_ref, 6) as u8,
-            7 => _mm_extract_epi8(lane_ref, 7) as u8,
-            8 => _mm_extract_epi8(lane_ref, 8) as u8,
-            9 => _mm_extract_epi8(lane_ref, 9) as u8,
-            10 => _mm_extract_epi8(lane_ref, 10) as u8,
-            11 => _mm_extract_epi8(lane_ref, 11) as u8,
-            12 => _mm_extract_epi8(lane_ref, 12) as u8,
-            13 => _mm_extract_epi8(lane_ref, 13) as u8,
-            14 => _mm_extract_epi8(lane_ref, 14) as u8,
-            15 => _mm_extract_epi8(lane_ref, 15) as u8,
             _ => core::hint::unreachable_unchecked(),
         }
     }
@@ -558,53 +464,24 @@ mod sse_tests {
         use super::*;
 
         #[test]
-        fn test_gen_u8_u16_u32_u64_bool_basic() {
+        fn test_gen_u32_u64_basic() {
             unsafe {
                 let mut state = [_mm_set1_epi8(0xAAu8 as i8); SSE_STATE_LEN];
-
-                // u8
-                let v8 = SSE::gen_u8(&state, 0, 0);
-                assert_eq!(v8, 0xAA);
-
-                // u16
-                let v16 = SSE::gen_u16(&state, 0, 0);
-                assert_eq!(v16, 0xAAAA);
 
                 // u32
                 let mut lane = _mm_set_epi32(0x11223344, 0x55667788, 0x99AABBCCu32 as i32, 0xDDEEFF00u32 as i32);
                 state[0] = lane;
 
-                assert_eq!(SSE::gen_u32(&state, 0, 0), 0xDDEEFF00);
-                assert_eq!(SSE::gen_u32(&state, 0, 1), 0x99AABBCC);
-                assert_eq!(SSE::gen_u32(&state, 0, 2), 0x55667788);
-                assert_eq!(SSE::gen_u32(&state, 0, 3), 0x11223344);
+                assert_eq!(SSE::next_u32(&state, 0, 0), 0xDDEEFF00);
+                assert_eq!(SSE::next_u32(&state, 0, 1), 0x99AABBCC);
+                assert_eq!(SSE::next_u32(&state, 0, 2), 0x55667788);
+                assert_eq!(SSE::next_u32(&state, 0, 3), 0x11223344);
 
                 // u64
                 lane = _mm_set_epi64x(0xAABBCCDDEEFF0011u64 as i64, 0x1122334455667788);
                 state[0] = lane;
-                assert_eq!(SSE::gen_u64(&state, 0, 0), 0x1122334455667788);
-                assert_eq!(SSE::gen_u64(&state, 0, 1), 0xAABBCCDDEEFF0011);
-
-                // bool (just check bit extraction)
-                let b_true = SSE::gen_bool(&state, 0, 0);
-                let b_false = SSE::gen_bool(&state, 0, 1);
-                assert!(b_true == true || b_false == true || b_true == b_false);
-            }
-        }
-
-        #[test]
-        fn test_gen_index_bounds() {
-            unsafe {
-                let state = [_mm_setzero_si128(); SSE_STATE_LEN];
-
-                // should panic only in debug with out-of-bound idx
-                #[cfg(debug_assertions)]
-                {
-                    let result = std::panic::catch_unwind(|| {
-                        SSE::gen_u8(&state, 0, 16);
-                    });
-                    assert!(result.is_err());
-                }
+                assert_eq!(SSE::next_u64(&state, 0, 0), 0x1122334455667788);
+                assert_eq!(SSE::next_u64(&state, 0, 1), 0xAABBCCDDEEFF0011);
             }
         }
 
@@ -613,12 +490,12 @@ mod sse_tests {
             unsafe {
                 let state = [_mm_set_epi32(1, 2, 3, 4); SSE_STATE_LEN];
 
-                let v1 = SSE::gen_u32(&state, 0, 0);
-                let v2 = SSE::gen_u32(&state, 0, 0);
+                let v1 = SSE::next_u32(&state, 0, 0);
+                let v2 = SSE::next_u32(&state, 0, 0);
                 assert_eq!(v1, v2);
 
-                let v3 = SSE::gen_u16(&state, 0, 0);
-                let v4 = SSE::gen_u16(&state, 0, 0);
+                let v3 = SSE::next_u64(&state, 0, 0);
+                let v4 = SSE::next_u64(&state, 0, 0);
                 assert_eq!(v3, v4);
             }
         }
@@ -628,7 +505,7 @@ mod sse_tests {
             unsafe {
                 let state =
                     [_mm_set_epi32(0x11223344, 0x55667788, 0x99AABBCCu32 as i32, 0xDDEEFF00u32 as i32); SSE_STATE_LEN];
-                let buf64 = SSE::gen_u64_batch::<2>(&state, 0);
+                let buf64 = SSE::batch_u64(&state, 0);
 
                 let expected_low = 0x99AABBCCDDEEFF00u64;
                 let expected_high = 0x1122334455667788u64;
@@ -643,7 +520,7 @@ mod sse_tests {
             unsafe {
                 let state =
                     [_mm_set_epi32(0x11223344, 0x55667788, 0x99AABBCCu32 as i32, 0xDDEEFF00u32 as i32); SSE_STATE_LEN];
-                let out = SSE::gen_u32_batch(&state, 0);
+                let out = SSE::batch_u32(&state, 0);
 
                 assert_eq!(out, [0xDDEEFF00, 0x99AABBCC, 0x55667788, 0x11223344]);
             }
@@ -662,47 +539,6 @@ mod sse_tests {
                 _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, mask);
 
                 assert_eq!(buf, MSK, "Mask constant must match SFMT definition");
-            }
-        }
-
-        #[cfg(target_feature = "sse4.1")]
-        #[test]
-        fn test_gen_const_functions_exhaustive() {
-            unsafe {
-                let lane = _mm_set_epi8(
-                    0x0F, 0x0E, 0x0D, 0x0C, 0x0B, 0x0A, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00,
-                );
-
-                // u8 extraction (0..15)
-                for i in 0..16 {
-                    let v = SSE::gen_u8_const(lane, i);
-                    assert_eq!(v, i as u8, "u8 const extraction mismatch at {}", i);
-                }
-
-                // u16 extraction (0..7)
-                for i in 0..8 {
-                    let v = SSE::gen_u16_const(lane, i);
-                    // Each 16-bit block = little endian combination of two u8s
-                    let expected = ((2 * i + 1) as u16) << 8 | (2 * i) as u16;
-                    assert_eq!(v, expected, "u16 const extraction mismatch at {}", i);
-                }
-
-                // u32 extraction (0..3)
-                let lane32 = _mm_set_epi32(0x11223344, 0x55667788, 0x99AABBCCu32 as i32, 0xDDEEFF00u32 as i32);
-
-                for (i, exp) in [0xDDEEFF00u32 as i32, 0x99AABBCCu32 as i32, 0x55667788, 0x11223344]
-                    .iter()
-                    .enumerate()
-                {
-                    let v = SSE::gen_u32_const(lane32, i as i32);
-                    assert_eq!(v, *exp as u32, "u32 const extraction mismatch at {}", i);
-                }
-
-                // u64 extraction (0..1)
-                let lane64 = _mm_set_epi64x(0xAABBCCDDEEFF0011u64 as i64, 0x1122334455667788);
-
-                assert_eq!(SSE::gen_u64_const(lane64, 0), 0x1122334455667788);
-                assert_eq!(SSE::gen_u64_const(lane64, 1), 0xAABBCCDDEEFF0011);
             }
         }
 
