@@ -7,3 +7,8 @@ license = "Apache-2.0"
 repository = "https://github.com/frozen-lab/sphur"
 keywords = ["prng", "simd", "random", "rng", "entropy"]
 exclude = ["flake.nix", "flake.lock", "assets/"]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3
