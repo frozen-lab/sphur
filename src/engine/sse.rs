@@ -169,8 +169,8 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
     let by = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), MASK128);
 
     // t1 = combine c and d shifts
-    let c_sr2 = sr_128_lane(c);
-    let d_sl2 = sl_128_lane_alignr(d);
+    let c_sr2 = sr_128_lane_ssse3(c);
+    let d_sl2 = sl_128_lane_ssse3(d);
     let t1 = _mm_xor_si128(c_sr2, d_sl2);
 
     // out = ((a ^ ax) ^ by) ^ (c_sr2 ^ d_sl2)
@@ -201,6 +201,19 @@ unsafe fn sr_128_lane(x: __m128i) -> __m128i {
     _mm_or_si128(part1, part2)
 }
 
+#[inline(always)]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn sr_128_lane_ssse3(x: __m128i) -> __m128i {
+    // SHIFT RIGHT by 4 bytes using PALIGNR (alignr(a,b,imm) = (concat(a,b) >> imm))
+    // we want zero >> 4 from x => alignr(zero, x, 4)
+    let zero = _mm_setzero_si128();
+    let shifted = _mm_alignr_epi8(zero, x, 4); // generates vpalignr / palignr
+                                               // element shifts
+    let part1 = _mm_srli_epi32(x, SR2 as i32);
+    let part2 = _mm_slli_epi32(shifted, (32 - SR2) as i32);
+    _mm_or_si128(part1, part2)
+}
+
 /// Perform left shift on entire sse2 lane
 ///
 /// ## Visualization
@@ -224,18 +237,14 @@ unsafe fn sl_128_lane(x: __m128i) -> __m128i {
     _mm_or_si128(part1, part2)
 }
 
-#[target_feature(enable = "ssse3")]
+#[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn sl_128_lane_alignr(x: __m128i) -> __m128i {
-    // part1 = x << SL2 (per-element). if SL2==1, compiler may use vpaddd; keep it generic:
-    let part1 = _mm_slli_epi32(x, SL2);
-
-    // tmp = bytes shifted left by 4 with zero-fill:
-    // alignr(x, zero, 12) effectively gives x << 4 bytes with zero fill
+unsafe fn sl_128_lane_ssse3(x: __m128i) -> __m128i {
+    // SHIFT LEFT by 4 bytes using PALIGNR: we want x << 4 => alignr(x, zero, 12)
     let zero = _mm_setzero_si128();
-    let tmp = _mm_alignr_epi8::<12>(x, zero); // x concatenated with zero, shift out lower bytes → left-byte-shift with zero
-    let part2 = _mm_srli_epi32(tmp, 32 - SL2);
-
+    let shifted = _mm_alignr_epi8(x, zero, 12); // 16 - 4 = 12
+    let part1 = _mm_slli_epi32(x, SL2 as i32);
+    let part2 = _mm_srli_epi32(shifted, (32 - SL2) as i32);
     _mm_or_si128(part1, part2)
 }
 
