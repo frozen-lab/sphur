@@ -40,7 +40,7 @@ impl<E: crate::engine::Engine<N, N64, N32>, const N: usize, const N64: usize, co
         self.lane = 0;
     }
 
-    #[inline(always)]
+    // #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
     pub(crate) unsafe fn gen_64(&mut self) -> u64 {
         // sanity check

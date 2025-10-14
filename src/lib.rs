@@ -16,13 +16,13 @@ impl Sphur {
         }
     }
 
-    #[inline(always)]
+    // #[inline(always)]
     pub fn new() -> Self {
         let seed = platform_seed();
         Sphur::new_seeded(seed)
     }
 
-    #[inline(always)]
+    // #[inline(always)]
     pub fn next_u64(&mut self) -> u64 {
         self.simd.next_u64()
     }

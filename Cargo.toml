@@ -12,3 +12,10 @@ exclude = ["flake.nix", "flake.lock", "assets/"]
 lto = "fat"
 codegen-units = 1
 opt-level = 3
+
+[profile.profiling]
+inherits = "release"
+debug = true
+lto = "off"
+opt-level = 2
+codegen-units = 1

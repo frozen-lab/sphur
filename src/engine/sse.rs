@@ -23,7 +23,8 @@ pub(crate) struct SSE;
 impl Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
     type Lane = __m128i;
 
-    #[inline(always)]
+    #[inline(never)]
+    // #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn new(seed: u64) -> [Self::Lane; SSE_STATE_LEN] {
         init_engine_state::<Self::Lane, SSE_STATE_LEN, { SSE_STATE_LEN * 4 }>(seed, |w| {
@@ -31,7 +32,8 @@ impl Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
         })
     }
 
-    #[inline(always)]
+    #[inline(never)]
+    // #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn regen(state: &mut [Self::Lane; SSE_STATE_LEN]) {
         let mask = Self::get_mask();
@@ -108,7 +110,8 @@ impl Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
         }
     }
 
-    #[inline(always)]
+    #[inline(never)]
+    // #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn batch_u64(state: &[Self::Lane; SSE_STATE_LEN], lane: usize) -> [u64; SSE_N64] {
         // sanity check
@@ -145,7 +148,8 @@ impl SSE {
     }
 }
 
-#[inline(always)]
+#[inline(never)]
+// #[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
 /// Performs SFMT recurrence relation
 ///
@@ -188,7 +192,8 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i, ma
     _mm_xor_si128(t0, _mm_xor_si128(by, t1))
 }
 
-#[inline(always)]
+#[inline(never)]
+// #[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
 /// Perform right shft on entire sse2 lane
 ///
@@ -222,7 +227,8 @@ unsafe fn sr_128_lane(x: __m128i) -> __m128i {
     _mm_or_si128(part1, part2)
 }
 
-#[inline(always)]
+#[inline(never)]
+// #[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
 /// Perform left shift on entire sse2 lane
 ///

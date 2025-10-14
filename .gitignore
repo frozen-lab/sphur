@@ -4,3 +4,8 @@
 **/bin/
 **/build/
 **/node_modules/
+
+# ignore perf files
+**/perf.data*
+**/perf.report*
+**/perf.*
