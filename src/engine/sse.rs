@@ -1,4 +1,5 @@
 use core::arch::x86_64::*;
+use std::sync::Once;
 
 pub(crate) const SSE_STATE_LEN: usize = 156;
 pub(crate) const SSE_N64: usize = 2;
@@ -7,9 +8,6 @@ pub(crate) const SSE_N32: usize = 4;
 const _: () = assert!(SSE_STATE_LEN % 2 == 0);
 const _: () = assert!(SSE_N64 % 2 == 0);
 const _: () = assert!(SSE_N32 % 2 == 0);
-
-const SL1: i32 = 18;
-const SL2: i32 = 1;
 
 const SR1: i32 = 11;
 const SR2: i32 = 1;
@@ -170,7 +168,7 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
 
     // t1 = combine c and d shifts
     let c_sr2 = sr_128_lane_ssse3(c);
-    let d_sl2 = sl_128_lane_ssse3(d);
+    let d_sl2 = sl_128_lane_impl(d);
     let t1 = _mm_xor_si128(c_sr2, d_sl2);
 
     // out = ((a ^ ax) ^ by) ^ (c_sr2 ^ d_sl2)
@@ -214,6 +212,31 @@ unsafe fn sr_128_lane_ssse3(x: __m128i) -> __m128i {
     _mm_or_si128(part1, part2)
 }
 
+//
+// shift left
+//
+
+const SL1: i32 = 18;
+const SL2: i32 = 1;
+
+type SL128 = unsafe fn(__m128i) -> __m128i;
+
+static mut SL_128_IMPL: SL128 = sl_128_lane_sse;
+static SL_128_INIT: Once = Once::new();
+
+#[inline(always)]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn sl_128_lane_impl(x: __m128i) -> __m128i {
+    // singleton init
+    SL_128_INIT.call_once(|| unsafe {
+        if is_x86_feature_detected!("ssse3") {
+            SL_128_IMPL = sl_128_lane_ssse3;
+        }
+    });
+
+    SL_128_IMPL(x)
+}
+
 /// Perform left shift on entire sse2 lane
 ///
 /// ## Visualization
@@ -227,9 +250,9 @@ unsafe fn sr_128_lane_ssse3(x: __m128i) -> __m128i {
 ///
 /// out => | A1 A2 A3 B0 | B1 B2 B3 C0 | C1 C2 C3 D0 | D1 D2 D3 00 |
 /// ```
-#[inline(never)]
+#[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn sl_128_lane(x: __m128i) -> __m128i {
+unsafe fn sl_128_lane_sse(x: __m128i) -> __m128i {
     let part1 = _mm_slli_epi32(x, SL2);
     let tmp = _mm_slli_si128(x, 4);
     let part2 = _mm_srli_epi32(tmp, 32 - SL2);
@@ -240,11 +263,10 @@ unsafe fn sl_128_lane(x: __m128i) -> __m128i {
 #[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn sl_128_lane_ssse3(x: __m128i) -> __m128i {
-    // SHIFT LEFT by 4 bytes using PALIGNR: we want x << 4 => alignr(x, zero, 12)
-    let zero = _mm_setzero_si128();
-    let shifted = _mm_alignr_epi8(x, zero, 12); // 16 - 4 = 12
     let part1 = _mm_slli_epi32(x, SL2 as i32);
+    let shifted = _mm_alignr_epi8(x, _mm_setzero_si128(), 12);
     let part2 = _mm_srli_epi32(shifted, (32 - SL2) as i32);
+
     _mm_or_si128(part1, part2)
 }
 
@@ -273,7 +295,7 @@ mod sse_tests {
         fn test_sl_128_lane_basic() {
             unsafe {
                 let x = _mm_set_epi32(0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d);
-                let r = sl_128_lane(x);
+                let r = sl_128_lane_sse(x);
 
                 let mut buf = [0u32; 4];
                 _mm_storeu_si128(buf.as_mut_ptr() as *mut __m128i, r);
@@ -430,7 +452,7 @@ mod sse_tests {
         fn test_sr_sl_lane_roundtrip() {
             unsafe {
                 let x = _mm_set_epi32(0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d);
-                let r = sl_128_lane(sr_128_lane(x));
+                let r = sl_128_lane_sse(sr_128_lane(x));
 
                 let mut orig = [0u32; 4];
                 let mut out = [0u32; 4];
