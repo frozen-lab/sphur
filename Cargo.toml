@@ -24,3 +24,8 @@ codegen-units = 1
 debug-assertions = false
 overflow-checks = false
 strip = "none"
+
+[[bench]]
+name = "basic"
+path = "benchmarks/basic.rs"
+harness = false
