@@ -16,6 +16,7 @@
           buildInputs = with pkgs; [
             gdb
             linuxPackages.perf
+            cargo-show-asm
           ];
         };
       });

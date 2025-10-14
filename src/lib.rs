@@ -1,4 +1,4 @@
-use simd::platform_seed;
+#![allow(unused)]
 
 mod engine;
 mod simd;
@@ -18,11 +18,11 @@ impl Sphur {
 
     // #[inline(always)]
     pub fn new() -> Self {
-        let seed = platform_seed();
+        let seed = crate::simd::platform_seed();
         Sphur::new_seeded(seed)
     }
 
-    // #[inline(always)]
+    #[inline(always)]
     pub fn next_u64(&mut self) -> u64 {
         self.simd.next_u64()
     }
