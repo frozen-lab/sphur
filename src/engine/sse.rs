@@ -158,7 +158,7 @@ impl super::Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
 ///
 /// (finally) out = t0 ^ by ^ t1
 /// ```
-#[inline(always)]
+#[inline(never)]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) -> __m128i {
     // t0 = a ^ (a << SL1)
@@ -170,7 +170,7 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
 
     // t1 = combine c and d shifts
     let c_sr2 = sr_128_lane(c);
-    let d_sl2 = sl_128_lane(d);
+    let d_sl2 = sl_128_lane_alignr(d);
     let t1 = _mm_xor_si128(c_sr2, d_sl2);
 
     // out = ((a ^ ax) ^ by) ^ (c_sr2 ^ d_sl2)
@@ -191,7 +191,7 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
 /// out => | 00 A0 A1 A2 | A3 B0 B1 B2 | B3 C0 C1 C2 | C3 D0 D1 D2 |
 ///
 /// ```
-#[inline(always)]
+#[inline(never)]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn sr_128_lane(x: __m128i) -> __m128i {
     let part1 = _mm_srli_epi32(x, SR2);
@@ -214,11 +214,26 @@ unsafe fn sr_128_lane(x: __m128i) -> __m128i {
 ///
 /// out => | A1 A2 A3 B0 | B1 B2 B3 C0 | C1 C2 C3 D0 | D1 D2 D3 00 |
 /// ```
-#[inline(always)]
+#[inline(never)]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn sl_128_lane(x: __m128i) -> __m128i {
     let part1 = _mm_slli_epi32(x, SL2);
     let tmp = _mm_slli_si128(x, 4);
+    let part2 = _mm_srli_epi32(tmp, 32 - SL2);
+
+    _mm_or_si128(part1, part2)
+}
+
+#[target_feature(enable = "ssse3")]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn sl_128_lane_alignr(x: __m128i) -> __m128i {
+    // part1 = x << SL2 (per-element). if SL2==1, compiler may use vpaddd; keep it generic:
+    let part1 = _mm_slli_epi32(x, SL2);
+
+    // tmp = bytes shifted left by 4 with zero-fill:
+    // alignr(x, zero, 12) effectively gives x << 4 bytes with zero fill
+    let zero = _mm_setzero_si128();
+    let tmp = _mm_alignr_epi8::<12>(x, zero); // x concatenated with zero, shift out lower bytes → left-byte-shift with zero
     let part2 = _mm_srli_epi32(tmp, 32 - SL2);
 
     _mm_or_si128(part1, part2)
