@@ -2,7 +2,7 @@
 name = "sphur"
 version = "0.2.0"
 edition = "2024"
-description = "Sphūr (स्फुर्) is a SIMD™ accelerated PRNG based on the SFMT algorithm."
+description = "Sphūr (स्फुर्) is a SIMD™ accelerated PRNG library."
 license = "Apache-2.0"
 repository = "https://github.com/frozen-lab/sphur"
 keywords = ["prng", "simd", "random", "rng", "entropy"]
@@ -11,11 +11,20 @@ exclude = ["flake.nix", "flake.lock", "assets/"]
 [profile.release]
 lto = "fat"
 codegen-units = 1
-opt-level = 3
+opt-level = "z"
+panic = "abort"
+strip = "symbols"
 
 [profile.profiling]
+panic = "abort"
 inherits = "release"
 debug = true
 lto = "off"
 opt-level = 2
 codegen-units = 1
+debug-assertions = false
+overflow-checks = false
+
+[profile.profiling.package.sphur]
+rustflags = ["-C", "force-frame-pointers=yes"]
+
