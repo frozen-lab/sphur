@@ -9,9 +9,6 @@ const _: () = assert!(SSE_STATE_LEN % 2 == 0);
 const _: () = assert!(SSE_N64 % 2 == 0);
 const _: () = assert!(SSE_N32 % 2 == 0);
 
-const SR1: i32 = 11;
-const SR2: i32 = 1;
-
 const POS1: usize = 122;
 static MASK128: __m128i = unsafe { core::mem::transmute([0xdfffffefu32, 0xddfecb7fu32, 0xbffaffffu32, 0xbffffff6u32]) };
 
@@ -156,7 +153,7 @@ impl super::Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
 ///
 /// (finally) out = t0 ^ by ^ t1
 /// ```
-#[inline(never)]
+#[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) -> __m128i {
     // t0 = a ^ (a << SL1)
@@ -167,12 +164,37 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
     let by = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), MASK128);
 
     // t1 = combine c and d shifts
-    let c_sr2 = sr_128_lane_ssse3(c);
+    let c_sr2 = sr_128_lane_impl(c);
     let d_sl2 = sl_128_lane_impl(d);
     let t1 = _mm_xor_si128(c_sr2, d_sl2);
 
     // out = ((a ^ ax) ^ by) ^ (c_sr2 ^ d_sl2)
     _mm_xor_si128(t0, _mm_xor_si128(by, t1))
+}
+
+//
+// shift right
+//
+
+const SR1: i32 = 11;
+const SR2: i32 = 1;
+
+type SR128 = unsafe fn(__m128i) -> __m128i;
+
+static mut SR_128_IMPL: SR128 = sr_128_lane_sse;
+static SR_128_INIT: Once = Once::new();
+
+#[inline(always)]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn sr_128_lane_impl(x: __m128i) -> __m128i {
+    // singleton init
+    SR_128_INIT.call_once(|| unsafe {
+        if is_x86_feature_detected!("ssse3") {
+            SR_128_IMPL = sl_128_lane_ssse3;
+        }
+    });
+
+    SR_128_IMPL(x)
 }
 
 /// Perform right shft on entire sse2 lane
@@ -191,7 +213,7 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
 /// ```
 #[inline(never)]
 #[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn sr_128_lane(x: __m128i) -> __m128i {
+unsafe fn sr_128_lane_sse(x: __m128i) -> __m128i {
     let part1 = _mm_srli_epi32(x, SR2);
     let tmp = _mm_srli_si128(x, 4);
     let part2 = _mm_slli_epi32(tmp, 32 - SR2);
