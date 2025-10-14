@@ -1,3 +1,9 @@
+///
+/// Run bench using,
+///
+/// ```sh
+/// sudo chrt -f 99 taskset -c 2 cargo bench --bench basic
+/// ```
 use sphur::Sphur;
 use std::hint::black_box;
 use std::time::Instant;

@@ -164,8 +164,8 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
     let by = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), MASK128);
 
     // t1 = combine c and d shifts
-    let c_sr2 = sr_128_lane_impl(c);
-    let d_sl2 = sl_128_lane_impl(d);
+    let c_sr2 = sr_128_lane_sse(c);
+    let d_sl2 = sl_128_lane_sse(d);
     let t1 = _mm_xor_si128(c_sr2, d_sl2);
 
     // out = ((a ^ ax) ^ by) ^ (c_sr2 ^ d_sl2)
@@ -178,24 +178,6 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
 
 const SR1: i32 = 11;
 const SR2: i32 = 1;
-
-type SR128 = unsafe fn(__m128i) -> __m128i;
-
-static mut SR_128_IMPL: SR128 = sr_128_lane_sse;
-static SR_128_INIT: Once = Once::new();
-
-#[inline(always)]
-#[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn sr_128_lane_impl(x: __m128i) -> __m128i {
-    // singleton init
-    SR_128_INIT.call_once(|| unsafe {
-        if is_x86_feature_detected!("ssse3") {
-            SR_128_IMPL = sl_128_lane_ssse3;
-        }
-    });
-
-    SR_128_IMPL(x)
-}
 
 /// Perform right shft on entire sse2 lane
 ///
@@ -221,43 +203,12 @@ unsafe fn sr_128_lane_sse(x: __m128i) -> __m128i {
     _mm_or_si128(part1, part2)
 }
 
-#[inline(always)]
-#[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn sr_128_lane_ssse3(x: __m128i) -> __m128i {
-    // SHIFT RIGHT by 4 bytes using PALIGNR (alignr(a,b,imm) = (concat(a,b) >> imm))
-    // we want zero >> 4 from x => alignr(zero, x, 4)
-    let zero = _mm_setzero_si128();
-    let shifted = _mm_alignr_epi8(zero, x, 4); // generates vpalignr / palignr
-                                               // element shifts
-    let part1 = _mm_srli_epi32(x, SR2 as i32);
-    let part2 = _mm_slli_epi32(shifted, (32 - SR2) as i32);
-    _mm_or_si128(part1, part2)
-}
-
 //
 // shift left
 //
 
 const SL1: i32 = 18;
 const SL2: i32 = 1;
-
-type SL128 = unsafe fn(__m128i) -> __m128i;
-
-static mut SL_128_IMPL: SL128 = sl_128_lane_sse;
-static SL_128_INIT: Once = Once::new();
-
-#[inline(always)]
-#[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn sl_128_lane_impl(x: __m128i) -> __m128i {
-    // singleton init
-    SL_128_INIT.call_once(|| unsafe {
-        if is_x86_feature_detected!("ssse3") {
-            SL_128_IMPL = sl_128_lane_ssse3;
-        }
-    });
-
-    SL_128_IMPL(x)
-}
 
 /// Perform left shift on entire sse2 lane
 ///
@@ -278,16 +229,6 @@ unsafe fn sl_128_lane_sse(x: __m128i) -> __m128i {
     let part1 = _mm_slli_epi32(x, SL2);
     let tmp = _mm_slli_si128(x, 4);
     let part2 = _mm_srli_epi32(tmp, 32 - SL2);
-
-    _mm_or_si128(part1, part2)
-}
-
-#[inline(always)]
-#[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn sl_128_lane_ssse3(x: __m128i) -> __m128i {
-    let part1 = _mm_slli_epi32(x, SL2 as i32);
-    let shifted = _mm_alignr_epi8(x, _mm_setzero_si128(), 12);
-    let part2 = _mm_srli_epi32(shifted, (32 - SL2) as i32);
 
     _mm_or_si128(part1, part2)
 }
