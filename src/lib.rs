@@ -1,44 +1,46 @@
-#![allow(unused)]
-
 mod engine;
 mod simd;
 mod state;
 
 pub struct Sphur {
-    simd: crate::simd::SIMD,
+    // NOTE (to compiler): I know what I’m doing. We will create internal mutability through
+    // shared refs!
+    simd: std::cell::UnsafeCell<crate::simd::SIMD>,
 }
+
+unsafe impl Send for Sphur {}
 
 impl Sphur {
     #[inline(always)]
     pub fn new_seeded(seed: u64) -> Self {
         Self {
-            simd: crate::simd::SIMD::new(seed),
+            simd: std::cell::UnsafeCell::new(crate::simd::SIMD::new(seed)),
         }
     }
 
-    // #[inline(always)]
+    #[inline(always)]
     pub fn new() -> Self {
         let seed = crate::simd::platform_seed();
         Sphur::new_seeded(seed)
     }
 
     #[inline(always)]
-    pub fn next_u64(&mut self) -> u64 {
-        self.simd.next_u64()
+    pub fn next_u64(&self) -> u64 {
+        unsafe { (*self.simd.get()).next_u64() }
     }
 
     #[inline(always)]
-    pub fn next_u32(&mut self) -> u32 {
-        self.simd.next_u32()
+    pub fn next_u32(&self) -> u32 {
+        unsafe { (*self.simd.get()).next_u32() }
     }
 
     #[inline(always)]
-    pub fn batch_u64(&mut self, buf: &mut [u64]) {
-        self.simd.batch_u64(buf)
+    pub fn batch_u64(&self, buf: &mut [u64]) {
+        unsafe { (*self.simd.get()).batch_u64(buf) }
     }
 
     #[inline(always)]
-    pub fn batch_u32(&mut self, buf: &mut [u32]) {
-        self.simd.batch_u32(buf)
+    pub fn batch_u32(&self, buf: &mut [u32]) {
+        unsafe { (*self.simd.get()).batch_u32(buf) }
     }
 }
