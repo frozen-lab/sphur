@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 mod engine;
 mod simd;
 mod state;

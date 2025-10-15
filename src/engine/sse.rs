@@ -253,6 +253,230 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
 #[cfg(test)]
 mod sse {
     use super::*;
+    use crate::engine::Engine;
+
+    #[cfg(test)]
+    mod engine {
+        use super::*;
+
+        #[allow(unsafe_op_in_unsafe_fn)]
+        unsafe fn lane_to_u32s(v: __m128i) -> [u32; 4] {
+            let mut out = [0u32; 4];
+            _mm_storeu_si128(out.as_mut_ptr() as *mut __m128i, v);
+
+            out
+        }
+
+        mod init {
+            use super::*;
+
+            #[test]
+            fn test_new_deterministic_same_seed() {
+                unsafe {
+                    let s1 = SSE::new(0xDEADBEEFu64);
+                    let s2 = SSE::new(0xDEADBEEFu64);
+
+                    let v1: Vec<[u32; 4]> = s1.iter().map(|&l| lane_to_u32s(l)).collect();
+                    let v2: Vec<[u32; 4]> = s2.iter().map(|&l| lane_to_u32s(l)).collect();
+
+                    assert_eq!(v1, v2, "engine::new must be deterministic for identical seeds");
+                }
+            }
+
+            #[test]
+            fn test_new_distinct_for_different_seeds() {
+                unsafe {
+                    let s1 = SSE::new(0x1111u64);
+                    let s2 = SSE::new(0x2222u64);
+
+                    let v1: Vec<[u32; 4]> = s1.iter().map(|&l| lane_to_u32s(l)).collect();
+                    let v2: Vec<[u32; 4]> = s2.iter().map(|&l| lane_to_u32s(l)).collect();
+
+                    assert_ne!(
+                        v1, v2,
+                        "different seeds should produce different initial states (very likely)"
+                    );
+                }
+            }
+
+            #[test]
+            fn test_new_alignment_and_length() {
+                unsafe {
+                    let state = SSE::new(0xBEEFu64);
+
+                    // length sanity
+                    assert_eq!(state.len(), SSE_STATE_LEN);
+
+                    // __m128i must be 16-byte aligned
+                    let ptr = state.as_ptr() as usize;
+                    assert_eq!(ptr % 16, 0, "state base pointer must be 16-byte aligned for SSE");
+
+                    // ensure state is not trivially all-zero
+                    let all_zero = state.iter().all(|&l| lane_to_u32s(l) == [0u32; 4]);
+                    assert!(!all_zero, "initialized state should not be all zeros");
+                }
+            }
+
+            #[test]
+            fn test_new_small_seed_variation() {
+                unsafe {
+                    // ensure small changes in seed change state (sanity)
+                    let s1 = SSE::new(0x1000u64);
+                    let s2 = SSE::new(0x1002u64);
+
+                    let v1: Vec<[u32; 4]> = s1.iter().map(|&l| lane_to_u32s(l)).collect();
+                    let v2: Vec<[u32; 4]> = s2.iter().map(|&l| lane_to_u32s(l)).collect();
+
+                    assert_ne!(v1, v2, "adjacent seeds should produce different states");
+                }
+            }
+        }
+
+        mod regen {
+            use super::*;
+            use std::collections::HashSet;
+
+            #[allow(unsafe_op_in_unsafe_fn)]
+            unsafe fn state_to_vec(state: &[__m128i; SSE_STATE_LEN]) -> Vec<[u32; 4]> {
+                state.iter().map(|&l| lane_to_u32s(l)).collect()
+            }
+
+            #[test]
+            fn test_regen_deterministic_and_changes() {
+                unsafe {
+                    let mut s1 = SSE::new(0xDEADBEEFu64);
+                    let mut s2 = SSE::new(0xDEADBEEFu64);
+
+                    // og snap
+                    let og = state_to_vec(&s1);
+
+                    // regen one copy
+                    SSE::regen(&mut s1);
+
+                    // regen the other copy the same way, should match
+                    SSE::regen(&mut s2);
+
+                    let after1 = state_to_vec(&s1);
+                    let after2 = state_to_vec(&s2);
+
+                    assert_eq!(after1, after2, "regen must be deterministic");
+                    assert_ne!(og, after1, "regen should modify the state");
+                }
+            }
+
+            #[test]
+            fn test_regen_multi_step_no_short_cycle() {
+                unsafe {
+                    let mut state = SSE::new(0xCAFEBABEu64);
+                    let mut seen: HashSet<Vec<[u32; 4]>> = HashSet::new();
+
+                    // record initial
+                    seen.insert(state_to_vec(&state));
+
+                    // run several regenerations and assert we don't repeat within this window
+                    for _ in 0..20 {
+                        SSE::regen(&mut state);
+                        let v = state_to_vec(&state);
+                        assert!(
+                            !seen.contains(&v),
+                            "regen produced a repeat state within 20 steps (very unlikely)"
+                        );
+                        seen.insert(v);
+                    }
+                }
+            }
+
+            #[test]
+            fn test_regen_wraparound_sanity() {
+                unsafe {
+                    // fill state with distinctive lane values equal to index (so we can see change)
+                    let mut state: [__m128i; SSE_STATE_LEN] =
+                        core::array::from_fn(|i| _mm_set_epi32(i as i32, i as i32, i as i32, i as i32));
+
+                    // snapshot a few end indices
+                    let n = SSE_STATE_LEN;
+                    let idxs = [n - 3, n - 2, n - 1];
+
+                    let before: Vec<[u32; 4]> = idxs.iter().map(|&i| lane_to_u32s(state[i])).collect();
+
+                    // run regen (should handle wraparound without panic)
+                    SSE::regen(&mut state);
+
+                    let after: Vec<[u32; 4]> = idxs.iter().map(|&i| lane_to_u32s(state[i])).collect();
+
+                    // ensure at least one of the tail lanes changed (sanity for wrap logic)
+                    assert!(
+                        before != after,
+                        "expected at least one wrapped index to change after regen"
+                    );
+                }
+            }
+        }
+    }
+
+    mod gen_functions {
+        use super::*;
+
+        #[allow(unsafe_op_in_unsafe_fn)]
+        unsafe fn set_lane_u32s(vals: [u32; 4]) -> __m128i {
+            _mm_set_epi32(vals[3] as i32, vals[2] as i32, vals[1] as i32, vals[0] as i32)
+        }
+
+        #[test]
+        fn test_batch_u32_and_u64_consistency() {
+            unsafe {
+                let state = [set_lane_u32s([1, 2, 3, 4]); SSE_STATE_LEN];
+                let lane_idx = 0;
+
+                let got32 = SSE::batch_u32(&state, lane_idx);
+                let got64 = SSE::batch_u64(&state, lane_idx);
+
+                let bytes32: [u8; 16] = core::mem::transmute(got32);
+                let bytes64: [u8; 16] = core::mem::transmute(got64);
+
+                assert_eq!(bytes32, bytes64);
+            }
+        }
+
+        #[test]
+        fn test_batch_u32_basic_values() {
+            unsafe {
+                let vals = [10, 20, 30, 40];
+                let lane = set_lane_u32s(vals);
+                let state = [lane; SSE_STATE_LEN];
+
+                let out = SSE::batch_u32(&state, 0);
+                assert_eq!(out, vals);
+            }
+        }
+
+        #[test]
+        fn test_batch_u64_correct_order() {
+            unsafe {
+                // 4 u32s => 2 u64s (little-endian order)
+                let vals = [0x11223344, 0x55667788, 0x99aabbcc, 0xddeeff00];
+                let lane = set_lane_u32s(vals);
+                let state = [lane; SSE_STATE_LEN];
+
+                // interpret little-endian pairs
+                let out64 = SSE::batch_u64(&state, 0);
+                let low = (vals[1] as u64) << 32 | vals[0] as u64;
+                let high = (vals[3] as u64) << 32 | vals[2] as u64;
+
+                assert_eq!(out64, [low, high]);
+            }
+        }
+
+        #[test]
+        fn test_batch_bounds_assertion() {
+            unsafe {
+                let state = [_mm_setzero_si128(); SSE_STATE_LEN];
+                let last_ok = SSE::batch_u32(&state, SSE_STATE_LEN - 1);
+
+                assert_eq!(last_ok, [0; 4]);
+            }
+        }
+    }
 
     mod indep_functions {
         use super::*;
