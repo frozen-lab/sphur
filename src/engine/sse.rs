@@ -173,7 +173,7 @@ const SR2: i32 = 1;
 /// out => | 00 A0 A1 A2 | A3 B0 B1 B2 | B3 C0 C1 C2 | C3 D0 D1 D2 |
 ///
 /// ```
-#[inline(never)]
+#[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn sr_128_lane_sse(x: __m128i) -> __m128i {
     let part1 = _mm_srli_epi32(x, SR2);

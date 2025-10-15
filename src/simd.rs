@@ -20,6 +20,7 @@ impl SIMD {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn next_u64(&mut self) -> u64 {
         match self {
             #[cfg(target_arch = "x86_64")]
@@ -30,6 +31,7 @@ impl SIMD {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn next_u32(&mut self) -> u32 {
         match self {
             #[cfg(target_arch = "x86_64")]
@@ -40,6 +42,7 @@ impl SIMD {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn batch_u64(&mut self, buf: &mut [u64]) {
         match self {
             #[cfg(target_arch = "x86_64")]
@@ -52,6 +55,7 @@ impl SIMD {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn batch_u32(&mut self, buf: &mut [u32]) {
         match self {
             #[cfg(target_arch = "x86_64")]
@@ -65,6 +69,7 @@ impl SIMD {
     }
 
     #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn fill_u64_buf(&mut self, buf: &mut [u64], len: usize) {
         // edge case
@@ -139,6 +144,7 @@ impl SIMD {
     }
 
     #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn fill_u32_buf(&mut self, buf: &mut [u32], len: usize) {
         // edge case

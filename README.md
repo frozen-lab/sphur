@@ -9,12 +9,12 @@ Sphūr (स्फुर्) is a SIMD™ accelerated PRNG built on top of the
 
 ## Benchmarks
 
-| Function (x86_64 w/ SSE) | Time (ns/value)     | Throughput (vals/sec) | CPU (cycles/iter) | IPC  |
-|:------------------------:|:-------------------:|:---------------------:|:-----------------:|:----:|
-| next_u64                 |         3.8234 ±0.2 |          249160515.93 | 13.38             | 2.97 |
-| next_u32                 |         1.7220 ±0.2 |          588826371.88 | 17.38             | 3.02 |
-| batch_64                 |         1.7096 ±0.2 |          611326909.51 | -                 | -    |
-| batch_u32                |         0.7443 ±0.2 |         1251766555.55 | -                 | -    |
+| Function (x86_64 w/ SSSE3) | Time (ns/value)     | Throughput (vals/sec) | CPU (cycles/iter) | IPC  |
+|:--------------------------:|:-------------------:|:---------------------:|:-----------------:|:----:|
+| next_u64                   |         2.1110 ±0.2 |          473701737.49 | 7.34              | 3.78 |
+| next_u32                   |         1.5408 ±0.2 |          649004232.81 | 5.05              | 3.84 |
+| batch_u64                  |         0.9997 ±0.2 |         1000273074.55 | -                 | -    |
+| batch_u32                  |         0.5030 ±0.2 |         1988111095.65 | -                 | -    |
 
 This benchmarks were conducted on following machine,
 

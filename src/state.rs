@@ -1,4 +1,4 @@
-#[repr(align(32))]
+#[repr(align(16))]
 pub(crate) struct State<E: crate::engine::Engine<N, N64, N32>, const N: usize, const N64: usize, const N32: usize> {
     state: [E::Lane; N],
     buf_u64: [u64; N64],
