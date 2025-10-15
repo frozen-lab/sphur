@@ -11,7 +11,7 @@ use std::{env, fs, io::Write, path::PathBuf};
 
 const BATCH_SIZE: usize = 1024;
 
-fn bench_next_u64(rng: &mut Sphur, iter: usize) -> f64 {
+fn bench_next_u64(rng: &Sphur, iter: usize) -> f64 {
     let start = Instant::now();
 
     for _ in 0..iter {
@@ -23,7 +23,7 @@ fn bench_next_u64(rng: &mut Sphur, iter: usize) -> f64 {
     dur as f64 / iter as f64
 }
 
-fn bench_next_u32(rng: &mut Sphur, iter: usize) -> f64 {
+fn bench_next_u32(rng: &Sphur, iter: usize) -> f64 {
     let start = Instant::now();
 
     for _ in 0..iter {
@@ -35,7 +35,7 @@ fn bench_next_u32(rng: &mut Sphur, iter: usize) -> f64 {
     dur as f64 / iter as f64
 }
 
-fn bench_batch_u64(rng: &mut Sphur, iter: usize) -> f64 {
+fn bench_batch_u64(rng: &Sphur, iter: usize) -> f64 {
     let mut buf = [0u64; BATCH_SIZE];
     let start = Instant::now();
 
@@ -48,7 +48,7 @@ fn bench_batch_u64(rng: &mut Sphur, iter: usize) -> f64 {
     dur as f64 / iter as f64
 }
 
-fn bench_batch_u32(rng: &mut Sphur, iter: usize) -> f64 {
+fn bench_batch_u32(rng: &Sphur, iter: usize) -> f64 {
     let mut buf = [0u32; BATCH_SIZE];
     let start = Instant::now();
 
@@ -79,18 +79,19 @@ fn main() {
     let iters: usize = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(1_000_000);
 
     let noise = 0.2_f64;
-    let mut rng = Sphur::new_seeded(0xDEADBEEF_u64);
+
+    let rng = Sphur::new_seeded(0xDEADBEEF_u64);
 
     // warmup
     for _ in 0..1_000 {
         black_box(rng.next_u64());
     }
 
-    let t_u64 = bench_next_u64(&mut rng, iters);
-    let t_u32 = bench_next_u32(&mut rng, iters * 2);
+    let t_u64 = bench_next_u64(&rng, iters);
+    let t_u32 = bench_next_u32(&rng, iters * 2);
 
-    let t_batch_u64 = bench_batch_u64(&mut rng, iters);
-    let t_batch_u32 = bench_batch_u32(&mut rng, iters * 2);
+    let t_batch_u64 = bench_batch_u64(&rng, iters);
+    let t_batch_u32 = bench_batch_u32(&rng, iters * 2);
 
     let report = format!(
         r#"

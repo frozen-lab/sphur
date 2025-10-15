@@ -1,5 +1,4 @@
 use core::arch::x86_64::*;
-use std::sync::Once;
 
 pub(crate) const SSE_STATE_LEN: usize = 156;
 pub(crate) const SSE_N64: usize = 2;

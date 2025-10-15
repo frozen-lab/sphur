@@ -65,7 +65,7 @@ pub(super) fn init_engine_state<Lane, const N: usize, const TOTAL_WORDS: usize>(
 #[inline(always)]
 fn period_certify<const TOTAL_WORDS: usize>(state: &mut [u32; TOTAL_WORDS]) {
     let inner = state[0] ^ state[1] ^ state[2] ^ state[3];
-    let mut check = (inner & PARITY[0]) ^ (inner & PARITY[1]) ^ (inner & PARITY[2]) ^ (inner & PARITY[3]);
+    let check = (inner & PARITY[0]) ^ (inner & PARITY[1]) ^ (inner & PARITY[2]) ^ (inner & PARITY[3]);
 
     if check.count_ones() & 1 == 0 {
         for i in 0..4 {
