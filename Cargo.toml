@@ -8,10 +8,7 @@ repository = "https://github.com/frozen-lab/sphur"
 readme = "README.md"
 keywords = ["prng", "simd", "random", "rng", "entropy"]
 categories = ["algorithms", "math"]
-exclude = ["flake.nix", "flake.lock", "assets/", "profile.sh", ".local/", "scripts/"]
-
-[dev-dependencies]
-statrs = "0.18.0"
+exclude = ["flake.nix", "flake.lock", "assets/", "profile.sh", ".local/", "scripts/", "randomness/"]
 
 [profile.release]
 lto = "fat"
