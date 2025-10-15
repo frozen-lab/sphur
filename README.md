@@ -12,6 +12,27 @@
 | batch_64                 |         1.7096 ±0.2 |          611326909.51 | -                | -    | -    |
 | batch_u32                |         0.7443 ±0.2 |         1251766555.55 | -                | -    | -    |
 
+## Randomness
+
+For a **perfect uniform distribution** `X ~ Uniform(0, 1)` we expect,
+
+**Mean (μ):** μ = (a + b) / 2 = (0 + 1) / 2 = **0.5**
+
+**Variance (σ²):** σ² = (b − a)² / 12 = (1)² / 12 ≈ **0.08333**  
+*(theoretical variance of any Uniform[0,1) RNG)*
+
+**Entropy:**  H = −∑ pᵢ log₂ pᵢ = −256 × (1/256) × log₂(1/256) = **8 bits**  
+For 8-bit bins (256 equally likely values):  
+*(i.e., 8 bits of uncertainty per byte)*
+
+**Observed Results (1 Million samples from `next_u64`)**
+
+| Metric     | Measured     | Expected   |
+|:----------:|:------------:|:----------:|
+| Mean       | 0.500338     | 0.500000   |
+| Variance   | 0.083263     | 0.083333   |
+| Entropy    | 7.994 bits   | 8.000 bits |
+
 ## Thread Safety
 
 `Sphur` is **`Send` but not `Sync`**.
