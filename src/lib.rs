@@ -8,6 +8,10 @@ pub struct Sphur {
     simd: std::cell::UnsafeCell<crate::simd::SIMD>,
 }
 
+/// Impl of `Send`, to allow moving across thread boundries
+///
+/// NOTE: `Sphur` does not implement `Sync`, as it uses internal mutable state
+/// w/o any lock to avoid locking overhead, and regression in perf.
 unsafe impl Send for Sphur {}
 
 impl Sphur {
