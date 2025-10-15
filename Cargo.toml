@@ -10,6 +10,9 @@ keywords = ["prng", "simd", "random", "rng", "entropy"]
 categories = ["algorithms", "math"]
 exclude = ["flake.nix", "flake.lock", "assets/", "profile.sh", ".local/", "scripts/"]
 
+[dev-dependencies]
+statrs = "0.18.0"
+
 [profile.release]
 lto = "fat"
 codegen-units = 1
