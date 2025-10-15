@@ -29,72 +29,79 @@ impl super::Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn regen(state: &mut [Self::Lane; SSE_STATE_LEN]) {
         let n = SSE_STATE_LEN;
+        let pos1 = POS1;
+        let ptr = state.as_mut_ptr();
+
+        // precompute for commy offsets
+        let n_minus_2 = n - 2;
+        let n_minus_1 = n - 1;
+
         let mut i0 = 0usize;
 
         while i0 + 1 < n {
-            //
-            // compute for lane `i`
-            //
+            let b0 = {
+                let t = i0 + pos1;
 
-            let mut b0 = i0 + POS1;
-            if b0 >= n {
-                b0 -= n;
-            }
+                if t >= n {
+                    t - n
+                } else {
+                    t
+                }
+            };
 
-            let mut c0 = i0 + n - 2;
-            if c0 >= n {
-                c0 -= n;
-            }
+            let c0 = if i0 + n_minus_2 >= n {
+                i0 + n_minus_2 - n
+            } else {
+                i0 + n_minus_2
+            };
 
-            let mut d0 = i0 + n - 1;
-            if d0 >= n {
-                d0 -= n;
-            }
-
-            //
-            // compute for lane `i + 1`
-            //
+            let d0 = if i0 + n_minus_1 >= n {
+                i0 + n_minus_1 - n
+            } else {
+                i0 + n_minus_1
+            };
 
             let i1 = i0 + 1;
-            let mut b1 = i1 + POS1;
 
-            if b1 >= n {
-                b1 -= n;
-            }
+            let b1 = {
+                let t = i1 + pos1;
 
-            let mut c1 = i1 + n - 2;
-            if c1 >= n {
-                c1 -= n;
-            }
+                if t >= n {
+                    t - n
+                } else {
+                    t
+                }
+            };
 
-            let mut d1 = i1 + n - 1;
-            if d1 >= n {
-                d1 -= n;
-            }
+            let c1 = if i1 + n_minus_2 >= n {
+                i1 + n_minus_2 - n
+            } else {
+                i1 + n_minus_2
+            };
 
-            //
-            // load lane `i`
-            //
+            let d1 = if i1 + n_minus_1 >= n {
+                i1 + n_minus_1 - n
+            } else {
+                i1 + n_minus_1
+            };
 
-            let a_0 = *state.get_unchecked(i0);
-            let b_0 = *state.get_unchecked(b0);
-            let c_0 = *state.get_unchecked(c0);
-            let d_0 = *state.get_unchecked(d0);
+            let a_0 = core::ptr::read(ptr.add(i0));
+            let b_0 = core::ptr::read(ptr.add(b0));
+            let c_0 = core::ptr::read(ptr.add(c0));
+            let d_0 = core::ptr::read(ptr.add(d0));
 
-            //
-            // load lane `i + 1`
-            //
+            let a_1 = core::ptr::read(ptr.add(i1));
+            let b_1 = core::ptr::read(ptr.add(b1));
+            let c_1 = core::ptr::read(ptr.add(c1));
+            let d_1 = core::ptr::read(ptr.add(d1));
 
-            let a_1 = *state.get_unchecked(i1);
-            let b_1 = *state.get_unchecked(b1);
-            let c_1 = *state.get_unchecked(c1);
-            let d_1 = *state.get_unchecked(d1);
-
+            // ILP optimized compute
             let out0 = recurrence_relation(a_0, b_0, c_0, d_0);
             let out1 = recurrence_relation(a_1, b_1, c_1, d_1);
 
-            *state.get_unchecked_mut(i0) = out0;
-            *state.get_unchecked_mut(i1) = out1;
+            // write back
+            core::ptr::write(ptr.add(i0), out0);
+            core::ptr::write(ptr.add(i1), out1);
 
             i0 += 2;
         }
@@ -127,49 +134,6 @@ impl super::Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
 
         buf
     }
-}
-
-/// Performs SFMT recurrence relation
-///
-/// ## Algo
-///
-/// ```md
-/// w = (a << SL1)
-/// x = ((b >> SR1) & MSK)
-/// y = (c >> 128 bits by SR2 logic)
-/// z = (d << 128 bits by SL2 logic)
-///
-/// out = a ^ w ^ x ^ y ^ z
-/// ```
-///
-/// ## ILP
-///
-/// Rather then chaining together, we compute indep pieces, for ILP
-///
-/// ```md
-/// t0 = a ^ (a << SL1)
-/// by = (b >> SR1) & mask
-/// t1 = sr128lane(c) ^ sl128lane(d)
-///
-/// (finally) out = t0 ^ by ^ t1
-/// ```
-#[inline(always)]
-#[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) -> __m128i {
-    // t0 = a ^ (a << SL1)
-    let ax = _mm_slli_epi32(a, SL1 as i32);
-    let t0 = _mm_xor_si128(a, ax);
-
-    // by = elem's shift + mask
-    let by = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), MASK128);
-
-    // t1 = combine c and d shifts
-    let c_sr2 = sr_128_lane_sse(c);
-    let d_sl2 = sl_128_lane_sse(d);
-    let t1 = _mm_xor_si128(c_sr2, d_sl2);
-
-    // out = ((a ^ ax) ^ by) ^ (c_sr2 ^ d_sl2)
-    _mm_xor_si128(t0, _mm_xor_si128(by, t1))
 }
 
 //
@@ -231,4 +195,47 @@ unsafe fn sl_128_lane_sse(x: __m128i) -> __m128i {
     let part2 = _mm_srli_epi32(tmp, 32 - SL2);
 
     _mm_or_si128(part1, part2)
+}
+
+/// Performs SFMT recurrence relation
+///
+/// ## Algo
+///
+/// ```md
+/// w = (a << SL1)
+/// x = ((b >> SR1) & MSK)
+/// y = (c >> 128 bits by SR2 logic)
+/// z = (d << 128 bits by SL2 logic)
+///
+/// out = a ^ w ^ x ^ y ^ z
+/// ```
+///
+/// ## ILP
+///
+/// Rather then chaining together, we compute indep pieces, for ILP
+///
+/// ```md
+/// t0 = a ^ (a << SL1)
+/// by = (b >> SR1) & mask
+/// t1 = sr128lane(c) ^ sl128lane(d)
+///
+/// (finally) out = t0 ^ by ^ t1
+/// ```
+#[inline(always)]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) -> __m128i {
+    // t0 = a ^ (a << SL1)
+    let t0 = _mm_xor_si128(a, _mm_slli_epi32(a, SL1 as i32));
+
+    // by = elem's shift + mask
+    let by = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), MASK128);
+
+    // t1 = combine c and d shifts
+    let c_sr2 = sr_128_lane_sse(c);
+    let d_sl2 = sl_128_lane_sse(d);
+    let t1 = _mm_xor_si128(c_sr2, d_sl2);
+
+    // out = ((a ^ ax) ^ by) ^ (c_sr2 ^ d_sl2)
+    let left = _mm_xor_si128(by, t0);
+    _mm_xor_si128(t1, left)
 }
