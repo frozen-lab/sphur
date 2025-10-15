@@ -20,7 +20,12 @@ const _: () = assert!(SSE_N64 % 2 == 0);
 const _: () = assert!(SSE_N32 % 2 == 0);
 
 const POS1: usize = 122;
-static MASK128: __m128i = unsafe { core::mem::transmute([0xdfffffefu32, 0xddfecb7fu32, 0xbffaffffu32, 0xbffffff6u32]) };
+const MASK_WORDS: [i32; 4] = [
+    0xbffffff6u32 as i32,
+    0xbffaffffu32 as i32,
+    0xddfecb7fu32 as i32,
+    0xdfffffefu32 as i32,
+];
 
 pub(crate) struct SSE;
 
@@ -41,6 +46,7 @@ impl super::Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
         let n = SSE_STATE_LEN;
         let pos1 = POS1;
         let ptr = state.as_mut_ptr();
+        let mask = _mm_set_epi32(MASK_WORDS[0], MASK_WORDS[1], MASK_WORDS[2], MASK_WORDS[3]);
 
         // precompute for commy offsets
         let n_minus_2 = n - 2;
@@ -106,8 +112,8 @@ impl super::Engine<SSE_STATE_LEN, SSE_N64, SSE_N32> for SSE {
             let d_1 = core::ptr::read(ptr.add(d1));
 
             // ILP optimized compute
-            let out0 = recurrence_relation(a_0, b_0, c_0, d_0);
-            let out1 = recurrence_relation(a_1, b_1, c_1, d_1);
+            let out0 = recurrence_relation(a_0, b_0, c_0, d_0, mask);
+            let out1 = recurrence_relation(a_1, b_1, c_1, d_1, mask);
 
             // write back
             core::ptr::write(ptr.add(i0), out0);
@@ -233,12 +239,12 @@ unsafe fn sl_128_lane_sse(x: __m128i) -> __m128i {
 /// ```
 #[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) -> __m128i {
+unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i, mask: __m128i) -> __m128i {
     // t0 = a ^ (a << SL1)
     let t0 = _mm_xor_si128(a, _mm_slli_epi32(a, SL1 as i32));
 
     // by = elem's shift + mask
-    let by = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), MASK128);
+    let by = _mm_and_si128(_mm_srli_epi32(b, SR1 as i32), mask);
 
     // t1 = combine c and d shifts
     let c_sr2 = sr_128_lane_sse(c);
@@ -562,6 +568,9 @@ mod sse {
         mod recurrence_relation {
             use super::*;
 
+            static MASK: __m128i =
+                unsafe { core::mem::transmute([0xbffffff6u32, 0xbffaffffu32, 0xddfecb7fu32, 0xdfffffefu32]) };
+
             #[test]
             fn test_recurrence_deterministic_known_inputs() {
                 unsafe {
@@ -570,11 +579,11 @@ mod sse {
                     let c = _mm_set_epi32(9, 10, 11, 12);
                     let d = _mm_set_epi32(13, 14, 15, 16);
 
-                    let out = recurrence_relation(a, b, c, d);
+                    let out = recurrence_relation(a, b, c, d, MASK);
                     let got = to_u32s(out);
 
                     assert_ne!(got, [0; 4]);
-                    assert_eq!(to_u32s(out), to_u32s(recurrence_relation(a, b, c, d)));
+                    assert_eq!(to_u32s(out), to_u32s(recurrence_relation(a, b, c, d, MASK)));
                 }
             }
 
@@ -586,11 +595,11 @@ mod sse {
                     let c = _mm_set1_epi32(0x55555555u32 as i32);
                     let d = _mm_set1_epi32(0x12345678u32 as i32);
 
-                    let out_full = recurrence_relation(a, b, c, d);
+                    let out_full = recurrence_relation(a, b, c, d, MASK);
 
                     // masking b with zeros should change output
                     let b_zero = _mm_set1_epi32(0);
-                    let out_masked = recurrence_relation(a, b_zero, c, d);
+                    let out_masked = recurrence_relation(a, b_zero, c, d, MASK);
 
                     assert_ne!(to_u32s(out_full), to_u32s(out_masked));
                 }
@@ -609,7 +618,7 @@ mod sse {
                     let orig_c = to_u32s(c);
                     let orig_d = to_u32s(d);
 
-                    let _ = recurrence_relation(a, b, c, d);
+                    let _ = recurrence_relation(a, b, c, d, MASK);
 
                     assert_eq!(to_u32s(a), orig_a);
                     assert_eq!(to_u32s(b), orig_b);
@@ -626,8 +635,8 @@ mod sse {
                     let c = _mm_set_epi32(9, 10, 11, 12);
                     let d = _mm_set_epi32(13, 14, 15, 16);
 
-                    let out1 = recurrence_relation(a, b, c, d);
-                    let out2 = recurrence_relation(d, c, b, a);
+                    let out1 = recurrence_relation(a, b, c, d, MASK);
+                    let out2 = recurrence_relation(d, c, b, a, MASK);
 
                     assert_ne!(to_u32s(out1), to_u32s(out2));
                 }

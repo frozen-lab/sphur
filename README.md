@@ -61,10 +61,19 @@ We avoid mutex and thread locks to keep operations uninterrupted and fast 🔥�
 
 But this comes at the cost, `Sphur` doesn’t implement `Sync`, so it can’t be shared across threads.
 
-## Origin of Śloka
+## 🌌 Origin of Śloka
 
-The **Śloka** 🌸 at the beginining briefly translates to,
+```
+स्पन्दनात् जगत् जायते ।
+तमोनिद्रायाः च महता प्रकाशः ॥
 
-**From vibration, the universe is born. From the slumber of darkness, awakens the first light.**
+spandanāt jagat jāyate ।  
+tamonidrāyāḥ ca mahatā prakāśaḥ ॥
+```
 
-It is an original Sanskrit composition, inspired by the concept of cosmic vibrations and the Big Bang.
+This **Śloka** briefly translates to,
+
+**“From vibration, the universe is born. From the slumber of darkness, awakens the first light.”**
+
+*It is an original Sanskrit composition, inspired by the concept of cosmic vibrations and the Big Bang.*
+
