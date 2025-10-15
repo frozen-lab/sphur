@@ -17,6 +17,12 @@
             gdb
             linuxPackages.perf
             cargo-show-asm
+
+            # python
+            python314
+            ruff
+            uv
+            pyright
           ];
         };
       });
