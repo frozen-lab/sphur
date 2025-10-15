@@ -1,3 +1,14 @@
+//! # SSE Engine
+//!
+//! **Only for x86_64 architectures!**
+//!
+//! This module implements the SFMT algorithm using the **SSE2** instruction set (and compatible
+//! upgraded ISA variants).
+//!
+//! This impl is **fully inlined**, **branch-minimized**, and manually unrolled for
+//! **ILP (Instruction-Level Parallelism)**!
+//!
+//! CAUTION: Handle with care, this is the hot path 😜.
 use core::arch::x86_64::*;
 
 pub(crate) const SSE_STATE_LEN: usize = 156;
@@ -237,4 +248,166 @@ unsafe fn recurrence_relation(a: __m128i, b: __m128i, c: __m128i, d: __m128i) ->
     // out = ((a ^ ax) ^ by) ^ (c_sr2 ^ d_sl2)
     let left = _mm_xor_si128(by, t0);
     _mm_xor_si128(t1, left)
+}
+
+#[cfg(test)]
+mod sse {
+    use super::*;
+
+    mod indep_functions {
+        use super::*;
+
+        #[allow(unsafe_op_in_unsafe_fn)]
+        unsafe fn to_u32s(v: __m128i) -> [u32; 4] {
+            let mut out = [0u32; 4];
+            _mm_storeu_si128(out.as_mut_ptr() as *mut __m128i, v);
+
+            out
+        }
+
+        mod sl_128_lane {
+            use super::*;
+
+            #[test]
+            fn test_sl_128_basic_pattern() {
+                unsafe {
+                    let x = _mm_set_epi32(0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d);
+                    let y = sl_128_lane_sse(x);
+                    let got = to_u32s(y);
+
+                    assert_ne!(got, [0; 4]);
+                }
+            }
+
+            #[test]
+            fn test_sl_128_all_zeros() {
+                unsafe {
+                    let x = _mm_set1_epi32(0);
+                    let y = sl_128_lane_sse(x);
+
+                    assert_eq!(to_u32s(y), [0; 4]);
+                }
+            }
+
+            #[test]
+            fn test_sl_128_all_ones() {
+                unsafe {
+                    let x = _mm_set1_epi32(u32::MAX as i32);
+                    let y = sl_128_lane_sse(x);
+
+                    assert_eq!(to_u32s(y), [0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF]);
+                }
+            }
+        }
+
+        mod sr_128_lane {
+            use super::*;
+
+            #[test]
+            fn test_sr_128_basic_pattern() {
+                unsafe {
+                    let x = _mm_set_epi32(0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d);
+                    let y = sr_128_lane_sse(x);
+                    let got = to_u32s(y);
+
+                    assert_ne!(got, [0; 4]);
+                }
+            }
+
+            #[test]
+            fn test_sr_128_all_zeros() {
+                unsafe {
+                    let x = _mm_set1_epi32(0);
+                    let y = sr_128_lane_sse(x);
+
+                    assert_eq!(to_u32s(y), [0; 4]);
+                }
+            }
+
+            #[test]
+            fn test_sr_128_all_ones() {
+                unsafe {
+                    let x = _mm_set1_epi32(u32::MAX as i32);
+                    let y = sr_128_lane_sse(x);
+
+                    assert_eq!(to_u32s(y), [u32::MAX, u32::MAX, u32::MAX, 0x7FFF_FFFF]);
+                }
+            }
+        }
+
+        mod recurrence_relation {
+            use super::*;
+
+            #[test]
+            fn test_recurrence_deterministic_known_inputs() {
+                unsafe {
+                    let a = _mm_set_epi32(1, 2, 3, 4);
+                    let b = _mm_set_epi32(5, 6, 7, 8);
+                    let c = _mm_set_epi32(9, 10, 11, 12);
+                    let d = _mm_set_epi32(13, 14, 15, 16);
+
+                    let out = recurrence_relation(a, b, c, d);
+                    let got = to_u32s(out);
+
+                    assert_ne!(got, [0; 4]);
+                    assert_eq!(to_u32s(out), to_u32s(recurrence_relation(a, b, c, d)));
+                }
+            }
+
+            #[test]
+            fn test_masking_effect_visible() {
+                unsafe {
+                    let a = _mm_set1_epi32(0xAAAAAAAAu32 as i32);
+                    let b = _mm_set1_epi32(0xFFFFFFFFu32 as i32);
+                    let c = _mm_set1_epi32(0x55555555u32 as i32);
+                    let d = _mm_set1_epi32(0x12345678u32 as i32);
+
+                    let out_full = recurrence_relation(a, b, c, d);
+
+                    // masking b with zeros should change output
+                    let b_zero = _mm_set1_epi32(0);
+                    let out_masked = recurrence_relation(a, b_zero, c, d);
+
+                    assert_ne!(to_u32s(out_full), to_u32s(out_masked));
+                }
+            }
+
+            #[test]
+            fn test_inputs_unchanged() {
+                unsafe {
+                    let a = _mm_set_epi32(1, 2, 3, 4);
+                    let b = _mm_set_epi32(5, 6, 7, 8);
+                    let c = _mm_set_epi32(9, 10, 11, 12);
+                    let d = _mm_set_epi32(13, 14, 15, 16);
+
+                    let orig_a = to_u32s(a);
+                    let orig_b = to_u32s(b);
+                    let orig_c = to_u32s(c);
+                    let orig_d = to_u32s(d);
+
+                    let _ = recurrence_relation(a, b, c, d);
+
+                    assert_eq!(to_u32s(a), orig_a);
+                    assert_eq!(to_u32s(b), orig_b);
+                    assert_eq!(to_u32s(c), orig_c);
+                    assert_eq!(to_u32s(d), orig_d);
+                }
+            }
+
+            #[test]
+            fn test_symmetry_breaks_if_swapped() {
+                unsafe {
+                    let a = _mm_set_epi32(1, 2, 3, 4);
+                    let b = _mm_set_epi32(5, 6, 7, 8);
+                    let c = _mm_set_epi32(9, 10, 11, 12);
+                    let d = _mm_set_epi32(13, 14, 15, 16);
+
+                    let out1 = recurrence_relation(a, b, c, d);
+                    let out2 = recurrence_relation(d, c, b, a);
+
+                    assert_ne!(to_u32s(out1), to_u32s(out2));
+                }
+            }
+        }
+    }
 }
