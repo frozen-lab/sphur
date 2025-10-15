@@ -6,7 +6,12 @@ description = "Sphūr (स्फुर्) is a SIMD™ accelerated PRNG library
 license = "Apache-2.0"
 repository = "https://github.com/frozen-lab/sphur"
 keywords = ["prng", "simd", "random", "rng", "entropy"]
-exclude = ["flake.nix", "flake.lock", "assets/", "benchmarks/", "profile.sh"]
+exclude = ["flake.nix", "flake.lock", "assets/", "profile.sh"]
+
+[[bench]]
+name = "basic"
+path = "benchmarks/basic.rs"
+harness = false
 
 [profile.release]
 lto = "fat"
@@ -25,7 +30,4 @@ debug-assertions = false
 overflow-checks = false
 strip = "none"
 
-[[bench]]
-name = "basic"
-path = "benchmarks/basic.rs"
-harness = false
+

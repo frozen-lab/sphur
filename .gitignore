@@ -9,3 +9,6 @@
 **/perf.data*
 **/perf.report*
 **/perf.*
+
+# ignore local files
+**/.local/
