@@ -256,4 +256,63 @@ mod tests {
 
         assert!(buf.iter().any(|&x| x != seq[0]));
     }
+
+    #[test]
+    fn test_range_u64_basic() {
+        let rng = Sphur::new_seeded(2025);
+
+        for _ in 0..1000 {
+            let v = rng.range_u64(10..20);
+            assert!(v >= 10 && v < 20);
+        }
+
+        for _ in 0..1000 {
+            let v = rng.range_u64(5..=15);
+            assert!(v >= 5 && v <= 15);
+        }
+
+        let v = rng.range_u64(0..=u64::MAX);
+        let _ = v; // should not panic
+    }
+
+    #[test]
+    fn test_range_u32_basic() {
+        let rng = Sphur::new_seeded(909);
+
+        for _ in 0..1000 {
+            let v = rng.range_u32(100..200);
+            assert!(v >= 100 && v < 200);
+        }
+
+        for _ in 0..1000 {
+            let v = rng.range_u32(50..=100);
+            assert!(v >= 50 && v <= 100);
+        }
+
+        let v = rng.range_u32(0..=u32::MAX);
+        let _ = v;
+    }
+
+    #[test]
+    #[should_panic(expected = "empty exclusive range")]
+    fn test_empty_range_panics() {
+        let rng = Sphur::new_seeded(1);
+        let _ = rng.range_u64(10..10);
+    }
+
+    #[test]
+    fn test_uniformity_rough_check() {
+        let rng = Sphur::new_seeded(7777);
+        let mut hits = [0u64; 10];
+
+        for _ in 0..10_000 {
+            let v = rng.range_u64(0..10);
+            hits[v as usize] += 1;
+        }
+
+        let avg = hits.iter().sum::<u64>() as f64 / 10.0;
+        let max_dev = hits.iter().map(|&x| (x as f64 - avg).abs()).fold(0.0, f64::max);
+
+        assert!(max_dev / avg < 0.25, "rough uniformity check failed");
+    }
 }
