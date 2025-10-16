@@ -7,7 +7,7 @@ license = "Apache-2.0"
 repository = "https://github.com/frozen-lab/sphur"
 readme = "README.md"
 keywords = ["prng", "simd", "random", "rng", "entropy"]
-categories = ["algorithms", "math"]
+categories = ["algorithms", "science", "simulation"]
 exclude = ["flake.nix", "flake.lock", "assets/", "profile.sh", ".local/", "scripts/", "randomness/"]
 
 [profile.release]
