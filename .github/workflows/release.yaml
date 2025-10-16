@@ -5,9 +5,6 @@ on:
     tags:
       - 'v*.*.*'
 
-  # allow manual trigger
-  workflow_dispatch:
-
 permissions:
   contents: write
   id-token: write
@@ -34,13 +31,8 @@ jobs:
           toolchain: stable
           cache-key: ${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Doc Tests w/ aarch64 (NEON)
-        if: matrix.arch == 'aarch64'
-        run: RUSTFLAGS="-C target-feature=+neon" cargo test --doc
-
-      - name: Doc Tests w/ x86_64 (SSE)
-        if: matrix.arch == 'x86_64'
-        run: RUSTFLAGS="-C target-feature=+sse2,+ssse3,+sse4.1,+sse4.2" cargo test --doc
+      - name: Doc Tests
+        run: RUSTFLAGS="-C target-cpu=native" cargo test --doc
 
   publish:
     needs: doc_tests
@@ -83,8 +75,12 @@ jobs:
       - name: Prep Release Doc
         run: |
           chmod +x ./scripts/release.sh
+          
           ./scripts/release.sh
-          cat ./local/bench.md >> ./local/release.md
+          echo "Added changelog"
+          
+          cat .local/bench.md >> .local/release.md
+          echo "Added bench results"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
