@@ -25,12 +25,7 @@ const SR2: i32 = 1;
 const SL1: i32 = 18;
 const SL2: i32 = 1;
 
-const MASK_WORDS: [i32; 4] = [
-    0xbffffff6u32 as i32,
-    0xbffaffffu32 as i32,
-    0xddfecb7fu32 as i32,
-    0xdfffffefu32 as i32,
-];
+const MASK_WORDS: [u32; 4] = [0xbffffff6u32, 0xbffaffffu32, 0xddfecb7fu32, 0xdfffffefu32];
 
 pub(crate) struct NEON;
 
@@ -321,7 +316,7 @@ mod neon {
             #[test]
             fn test_regen_wraparound_sanity() {
                 unsafe {
-                    let mut state: [uint32x4_t; NEON_STATE_LEN] = core::array::from_fn(|i| vdupq_n_u32(i as i32));
+                    let mut state: [uint32x4_t; NEON_STATE_LEN] = core::array::from_fn(|i| vdupq_n_u32(i as u32));
 
                     let n = NEON_STATE_LEN;
                     let idxs = [n - 3, n - 2, n - 1];
@@ -447,7 +442,9 @@ mod neon {
         mod recurrence_relation {
             use super::*;
 
-            static MASK: uint32x4_t = unsafe { vld1q_u32([0xbffffff6, 0xbffaffff, 0xddfecb7f, 0xdfffffef].as_ptr()) };
+            fn mask() -> uint32x4_t {
+                unsafe { vld1q_u32(MASK_WORDS.as_ptr()) }
+            }
 
             #[test]
             fn test_recurrence_deterministic_known_inputs() {
@@ -457,11 +454,11 @@ mod neon {
                     let c = vld1q_u32([9, 10, 11, 12].as_ptr());
                     let d = vld1q_u32([13, 14, 15, 16].as_ptr());
 
-                    let out = recurrence_relation(a, b, c, d, MASK);
+                    let out = recurrence_relation(a, b, c, d, mask());
                     let got = to_u32s(out);
 
                     assert_ne!(got, [0; 4]);
-                    assert_eq!(to_u32s(out), to_u32s(recurrence_relation(a, b, c, d, MASK)));
+                    assert_eq!(to_u32s(out), to_u32s(recurrence_relation(a, b, c, d, mask())));
                 }
             }
 
@@ -473,9 +470,9 @@ mod neon {
                     let c = vdupq_n_u32(0x55555555);
                     let d = vdupq_n_u32(0x12345678);
 
-                    let out_full = recurrence_relation(a, b, c, d, MASK);
+                    let out_full = recurrence_relation(a, b, c, d, mask());
                     let b_zero = vdupq_n_u32(0);
-                    let out_masked = recurrence_relation(a, b_zero, c, d, MASK);
+                    let out_masked = recurrence_relation(a, b_zero, c, d, mask());
 
                     assert_ne!(to_u32s(out_full), to_u32s(out_masked));
                 }
