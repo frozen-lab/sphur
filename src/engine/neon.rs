@@ -25,11 +25,11 @@ const SR2: i32 = 1;
 const SL1: i32 = 18;
 const SL2: i32 = 1;
 
-const MASK_WORDS_U32: [u32; 4] = [
-    super::MASK_WORDS[0] as u32,
-    super::MASK_WORDS[1] as u32,
-    super::MASK_WORDS[2] as u32,
-    super::MASK_WORDS[3] as u32,
+const MASK_WORDS: [i32; 4] = [
+    0xbffffff6u32 as i32,
+    0xbffaffffu32 as i32,
+    0xddfecb7fu32 as i32,
+    0xdfffffefu32 as i32,
 ];
 
 pub(crate) struct NEON;
@@ -49,7 +49,7 @@ impl super::Engine<NEON_STATE_LEN, NEON_N64, NEON_N32> for NEON {
         let n = NEON_STATE_LEN;
         let pos1 = POS1;
         let ptr = state.as_mut_ptr();
-        let mask = vld1q_u32(MASK_WORDS_U32.as_ptr());
+        let mask = vld1q_u32(MASK_WORDS.as_ptr());
 
         let n_minus_2 = n - 2;
         let n_minus_1 = n - 1;
@@ -143,7 +143,7 @@ impl super::Engine<NEON_STATE_LEN, NEON_N64, NEON_N32> for NEON {
 #[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn sr_128_lane_neon(x: uint32x4_t) -> uint32x4_t {
-    let part1 = vshrq_n_u32(x, SR2 as u32);
+    let part1 = vshrq_n_u32(x, SR2 as i32);
 
     let x_u8 = vreinterpretq_u8_u32(x);
     let zero_u8 = vdupq_n_u8(0);
@@ -151,7 +151,7 @@ unsafe fn sr_128_lane_neon(x: uint32x4_t) -> uint32x4_t {
     let tmp_bytes = vextq_u8(zero_u8, x_u8, 12);
     let tmp_u32 = vreinterpretq_u32_u8(tmp_bytes);
 
-    let part2 = vshlq_n_u32(tmp_u32, (32 - SR2) as u32);
+    let part2 = vshlq_n_u32(tmp_u32, (32 - SR2) as i32);
 
     vorrq_u32(part1, part2)
 }
@@ -159,7 +159,7 @@ unsafe fn sr_128_lane_neon(x: uint32x4_t) -> uint32x4_t {
 #[inline(always)]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn sl_128_lane_neon(x: uint32x4_t) -> uint32x4_t {
-    let part1 = vshlq_n_u32(x, SL2 as u32);
+    let part1 = vshlq_n_u32(x, SL2 as i32);
 
     let x_u8 = vreinterpretq_u8_u32(x);
     let zero_u8 = vdupq_n_u8(0);
@@ -167,7 +167,7 @@ unsafe fn sl_128_lane_neon(x: uint32x4_t) -> uint32x4_t {
     let tmp_bytes = vextq_u8(x_u8, zero_u8, 4);
     let tmp_u32 = vreinterpretq_u32_u8(tmp_bytes);
 
-    let part2 = vshrq_n_u32(tmp_u32, (32 - SL2) as u32);
+    let part2 = vshrq_n_u32(tmp_u32, (32 - SL2) as i32);
 
     vorrq_u32(part1, part2)
 }
@@ -182,10 +182,10 @@ unsafe fn recurrence_relation(
     mask: uint32x4_t,
 ) -> uint32x4_t {
     // t0 = a ^ (a << SL1)
-    let t0 = veorq_u32(a, vshlq_n_u32(a, SL1 as u32));
+    let t0 = veorq_u32(a, vshlq_n_u32(a, SL1 as i32));
 
     // by = (b >> SR1) & mask
-    let by = vandq_u32(vshrq_n_u32(b, SR1 as u32), mask);
+    let by = vandq_u32(vshrq_n_u32(b, SR1 as i32), mask);
 
     // t1 = sr128(c) ^ sl128(d)
     let c_sr2 = sr_128_lane_neon(c);
@@ -201,7 +201,6 @@ unsafe fn recurrence_relation(
 mod neon {
     use super::*;
     use crate::engine::Engine;
-    use core::arch::aarch64::*;
 
     #[cfg(test)]
     mod engine {
@@ -322,7 +321,7 @@ mod neon {
             #[test]
             fn test_regen_wraparound_sanity() {
                 unsafe {
-                    let mut state: [uint32x4_t; NEON_STATE_LEN] = core::array::from_fn(|i| vdupq_n_u32(i as u32));
+                    let mut state: [uint32x4_t; NEON_STATE_LEN] = core::array::from_fn(|i| vdupq_n_u32(i as i32));
 
                     let n = NEON_STATE_LEN;
                     let idxs = [n - 3, n - 2, n - 1];
@@ -406,7 +405,7 @@ mod neon {
             #[test]
             fn test_sl_128_basic_pattern() {
                 unsafe {
-                    let x = vld1q_u32(&[1, 2, 3, 4]);
+                    let x = vld1q_u32([1, 2, 3, 4].as_ptr());
                     let y = sl_128_lane_neon(x);
                     let got = to_u32s(y);
                     assert_ne!(got, [0; 4]);
@@ -429,7 +428,7 @@ mod neon {
             #[test]
             fn test_sr_128_basic_pattern() {
                 unsafe {
-                    let x = vld1q_u32(&[1, 2, 3, 4]);
+                    let x = vld1q_u32([1, 2, 3, 4].as_ptr());
                     let y = sr_128_lane_neon(x);
                     assert_ne!(to_u32s(y), [0; 4]);
                 }
@@ -448,18 +447,19 @@ mod neon {
         mod recurrence_relation {
             use super::*;
 
-            static MASK: uint32x4_t = unsafe { vld1q_u32(&[0xbffffff6, 0xbffaffff, 0xddfecb7f, 0xdfffffef]) };
+            static MASK: uint32x4_t = unsafe { vld1q_u32([0xbffffff6, 0xbffaffff, 0xddfecb7f, 0xdfffffef].as_ptr()) };
 
             #[test]
             fn test_recurrence_deterministic_known_inputs() {
                 unsafe {
-                    let a = vld1q_u32(&[1, 2, 3, 4]);
-                    let b = vld1q_u32(&[5, 6, 7, 8]);
-                    let c = vld1q_u32(&[9, 10, 11, 12]);
-                    let d = vld1q_u32(&[13, 14, 15, 16]);
+                    let a = vld1q_u32([1, 2, 3, 4].as_ptr());
+                    let b = vld1q_u32([5, 6, 7, 8].as_ptr());
+                    let c = vld1q_u32([9, 10, 11, 12].as_ptr());
+                    let d = vld1q_u32([13, 14, 15, 16].as_ptr());
 
                     let out = recurrence_relation(a, b, c, d, MASK);
                     let got = to_u32s(out);
+
                     assert_ne!(got, [0; 4]);
                     assert_eq!(to_u32s(out), to_u32s(recurrence_relation(a, b, c, d, MASK)));
                 }
