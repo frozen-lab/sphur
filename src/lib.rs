@@ -42,6 +42,7 @@
 //!
 //!     let mut buf32 = [0u32; 8];
 //!     rng.batch_u32(&mut buf32);
+//!     assert!(buf32.iter().any(|&v| v != 0));
 //!
 //!     // Reproducible streams
 //!     let r1 = Sphur::new_seeded(42);
@@ -93,6 +94,10 @@ compile_error!(
 /// let mut buf = [0u64; 4];
 /// rng.batch_u64(&mut buf);
 /// assert!(buf.iter().any(|&v| v != 0));
+///
+/// let mut buf2 = [0u32; 4];
+/// rng.batch_u32(&mut buf2);
+/// assert!(buf2.iter().any(|&v| v != 0));
 ///
 /// // reproducible stream
 /// let a = Sphur::new_seeded(42);

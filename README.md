@@ -21,6 +21,58 @@
 Sphūr (स्फुर्) is a SIMD™ accelerated PRNG built on top of the
 [SFMT (SIMD-oriented Fast Mersenne Twister)](https://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/SFMT/).
 
+> [!IMPORTANT]
+> Sphūr is **not cryptographically secure**.
+
+## Quick Start
+
+<em>Read [Sphur](https://docs.rs/sphur/latest/sphur/struct.Sphur.html) docs for detailed usgae guide.</em>
+
+Install `Sphur` using following command,
+
+```sh
+  cargo add sphur
+```
+
+Quick start guide,
+
+```rs
+use sphur::Sphur;
+
+fn main() {
+    // Auto-seed with platform entropy
+    let rng = Sphur::new();
+    
+    // Basic
+    let v64 = rng.next_u64();
+    let v32 = rng.next_u32();
+    println!("u64: {v64}, u32: {v32}");
+    
+    // Ranged sampling
+    
+    let x = rng.range_u64(10..100);
+    assert!((10..100).contains(&x));
+    
+    let y = rng.range_u32(5..=15);
+    assert!((5..=15).contains(&y));
+    
+    // Batch generation
+    
+    let mut buf64 = [0u64; 8];
+    rng.batch_u64(&mut buf64);
+    assert!(buf64.iter().any(|&v| v != 0));
+    
+    let mut buf32 = [0u32; 8];
+    rng.batch_u32(&mut buf32);
+    assert!(buf32.iter().any(|&v| v != 0));
+    
+    // Reproducible streams
+    let r1 = Sphur::new_seeded(42);
+    let r2 = Sphur::new_seeded(42);
+    assert_eq!(r1.next_u64(), r2.next_u64());
+}
+```
+
 ## Benchmarks (x86_64)
 
 | Function     | Time (ns/value)     | Throughput (vals/sec) | CPU (cycles/iter) | IPC  |
@@ -103,7 +155,9 @@ tamonidrāyāḥ ca mahatā prakāśaḥ ॥
 
 This **Śloka** briefly translates to,
 
-**“From vibration, the universe is born. From the slumber of darkness, awakens the first light.”**
+**“From the vibration of Consciousness, the universe is born; and from the great sleep of
+darkness, awakens the first light.”**
 
-*It is an original Sanskrit composition, inspired by the concept of cosmic vibrations and the Big Bang.*
+<em>I have created this composition, inspired by the concept of cosmic expansion (The Big Bang)
+and the Spanda doctrine of Kashmir Shaivism</em>
 
