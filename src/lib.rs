@@ -1,3 +1,55 @@
+//! # Sphūr
+//!
+//! **Sphūr (स्फुर्)** is a SIMD™ accelerated PRNG built on top of the
+//! [SFMT (SIMD-oriented Fast Mersenne Twister)](https://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/SFMT/).
+//!
+//! ## IMPORTANT
+//!
+//! - Sphūr is **not cryptographically secure**.
+//! - Only **64-bit** targets are **supported**.
+//!
+//! ## Platform Support
+//!
+//! - Linux (x86_64, aarch64)
+//! - Mac (x86_64, aarch64)
+//! - Windows (x86_64, aarch64)
+//!
+//! ## Quick Start
+//!
+//! ```
+//! use sphur::Sphur;
+//!
+//! fn main() {
+//!     // Auto-seed with platform entropy
+//!     let rng = Sphur::new();
+//!
+//!     // Basic
+//!     let v64 = rng.next_u64();
+//!     let v32 = rng.next_u32();
+//!     println!("u64: {v64}, u32: {v32}");
+//!
+//!     // Ranged sampling
+//!     let x = rng.range_u64(10..100);
+//!     assert!((10..100).contains(&x));
+//!
+//!     let y = rng.range_u32(5..=15);
+//!     assert!((5..=15).contains(&y));
+//!
+//!     // Batch generation
+//!     let mut buf64 = [0u64; 8];
+//!     rng.batch_u64(&mut buf64);
+//!     assert!(buf64.iter().any(|&v| v != 0));
+//!
+//!     let mut buf32 = [0u32; 8];
+//!     rng.batch_u32(&mut buf32);
+//!
+//!     // Reproducible streams
+//!     let r1 = Sphur::new_seeded(42);
+//!     let r2 = Sphur::new_seeded(42);
+//!     assert_eq!(r1.next_u64(), r2.next_u64());
+//! }
+//! ```
+//!
 mod engine;
 mod simd;
 mod state;
@@ -11,9 +63,44 @@ compile_error!(
     "[ERROR]: Sphūr requires 64-bit architecture (x86_64 or AArch64). 32-bit targets (i386/armv7) are not supported."
 );
 
+/// **Sphūr (स्फुर्)** is a SIMD™ accelerated PRNG.
+///
+/// # Thread Safety
+///
+/// This type is `Send` but **not `Sync`**, allowing safe transfer between threads
+/// without synchronization overhead.
+///
+/// Internally, it uses `UnsafeCell` for mutability, so each instance can only be used by
+/// single thread at a time.
+///
+/// # Example
+///
+/// ```
+/// use sphur::Sphur;
+///
+/// // auto-seeded
+/// let rng = Sphur::new();
+///
+/// // single values
+/// let v1 = rng.next_u64();
+/// let v2 = rng.next_u32();
+///
+/// // ranged sampling
+/// let val = rng.range_u64(1..10);
+/// assert!((1..10).contains(&val));
+///
+/// // batch generation
+/// let mut buf = [0u64; 4];
+/// rng.batch_u64(&mut buf);
+/// assert!(buf.iter().any(|&v| v != 0));
+///
+/// // reproducible stream
+/// let a = Sphur::new_seeded(42);
+/// let b = Sphur::new_seeded(42);
+/// assert_eq!(a.next_u64(), b.next_u64());
+/// ```
 pub struct Sphur {
-    // NOTE (to compiler): I know what I’m doing. We will create internal mutability through
-    // shared refs!
+    // NOTE (to compiler): I know what I’m doing. Mutability is a social construct anyways!
     simd: std::cell::UnsafeCell<crate::simd::SIMD>,
 }
 
@@ -24,6 +111,16 @@ pub struct Sphur {
 unsafe impl Send for Sphur {}
 
 impl Sphur {
+    /// Initialize [Sphur] state w/ an initial seed.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use sphur::Sphur;
+    ///
+    /// let rng = Sphur::new_seeded(123);
+    /// assert_ne!(rng.next_u64(), 0);
+    /// ```
     #[inline(always)]
     pub fn new_seeded(seed: u64) -> Self {
         Self {
@@ -31,32 +128,101 @@ impl Sphur {
         }
     }
 
+    /// Initialize [Sphur] state from the platform's entropy source.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use sphur::Sphur;
+    ///
+    /// let rng = Sphur::new();
+    /// assert!(rng.next_u64() <= u64::MAX);
+    /// ```
     #[inline(always)]
     pub fn new() -> Self {
         let seed = crate::simd::platform_seed();
         Sphur::new_seeded(seed)
     }
 
+    /// Generate a 64-bit pseudorandom integer.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let rng = sphur::Sphur::new();
+    ///
+    /// let v = rng.next_u64();
+    /// assert!(v <= u64::MAX);
+    /// ```
     #[inline(always)]
     pub fn next_u64(&self) -> u64 {
         unsafe { (*self.simd.get()).next_u64() }
     }
 
+    /// Generate a 32-bit pseudorandom integer.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let rng = sphur::Sphur::new();
+    ///
+    /// let v = rng.next_u32();
+    /// assert!(v <= u32::MAX);
+    /// ```
     #[inline(always)]
     pub fn next_u32(&self) -> u32 {
         unsafe { (*self.simd.get()).next_u32() }
     }
 
+    /// Fills the given buffer with random `u64` values.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let rng = sphur::Sphur::new();
+    ///
+    /// let mut buf = [0u64; 4];
+    /// rng.batch_u64(&mut buf);
+    ///
+    /// assert!(buf.iter().any(|&v| v != 0));
+    /// ```
     #[inline(always)]
     pub fn batch_u64(&self, buf: &mut [u64]) {
         unsafe { (*self.simd.get()).batch_u64(buf) }
     }
 
+    /// Fills the given buffer with random `u32` values.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let rng = sphur::Sphur::new();
+    ///
+    /// let mut buf = [0u32; 4];
+    /// rng.batch_u32(&mut buf);
+    ///
+    /// assert!(buf.iter().any(|&v| v != 0));
+    /// ```
     #[inline(always)]
     pub fn batch_u32(&self, buf: &mut [u32]) {
         unsafe { (*self.simd.get()).batch_u32(buf) }
     }
 
+    /// Generates a uniformly distributed `u64` within a range (exclusive or inclusive).
+    ///
+    /// NOTE: We internally use **rejection sampling** to eliminate bias.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let rng = sphur::Sphur::new();
+    ///
+    /// let x = rng.range_u64(1..10);
+    /// assert!((1..10).contains(&x));
+    ///
+    /// let y = rng.range_u64(1..=10);
+    /// assert!((1..=10).contains(&y));
+    /// ```
     #[inline(always)]
     pub fn range_u64<R: IntoSRangeU64>(&self, range: R) -> u64 {
         let (start, span) = range.into_bounds();
@@ -78,6 +244,21 @@ impl Sphur {
         }
     }
 
+    /// Generates a uniformly distributed `u32` within a range (exclusive or inclusive).
+    ///
+    /// NOTE: We internally use **rejection sampling** to eliminate bias.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let rng = sphur::Sphur::new();
+    ///
+    /// let x = rng.range_u32(1..10);
+    /// assert!((1..10).contains(&x));
+    ///
+    /// let y = rng.range_u32(1..=10);
+    /// assert!((1..=10).contains(&y));
+    /// ```
     #[inline(always)]
     pub fn range_u32<R: IntoSRangeU32>(&self, range: R) -> u32 {
         let (start, span) = range.into_bounds();
