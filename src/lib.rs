@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 mod engine;
 mod simd;
 mod state;
@@ -48,6 +46,122 @@ impl Sphur {
     #[inline(always)]
     pub fn batch_u32(&self, buf: &mut [u32]) {
         unsafe { (*self.simd.get()).batch_u32(buf) }
+    }
+
+    #[inline(always)]
+    pub fn range_u64<R: IntoSRangeU64>(&self, range: R) -> u64 {
+        let (start, span) = range.into_bounds();
+
+        if span == 0 {
+            return self.next_u64();
+        }
+
+        // rejection sampling to remove bias
+        let hi = ((u128::MAX / span as u128) * span as u128) >> 64;
+        let zone = ((hi << 64) | 0xFFFF_FFFF_FFFF_FFFF) as u64;
+
+        loop {
+            let x = self.next_u64();
+
+            if x < zone {
+                return start + Self::mulhi_u64(x, span);
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn range_u32<R: IntoSRangeU32>(&self, range: R) -> u32 {
+        let (start, span) = range.into_bounds();
+
+        if span == 0 {
+            return self.next_u32();
+        }
+
+        // rejection sampling to remove bias
+        let hi = ((u64::MAX / span as u64) * span as u64) >> 32;
+        let zone = ((hi << 32) | 0xFFFF_FFFF) as u32;
+
+        loop {
+            let x = self.next_u32();
+
+            if x < zone {
+                return start + Self::mulhi_u32(x, span);
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn mulhi_u64(a: u64, b: u64) -> u64 {
+        ((a as u128 * b as u128) >> 64) as u64
+    }
+
+    #[inline(always)]
+    fn mulhi_u32(a: u32, b: u32) -> u32 {
+        ((a as u64 * b as u64) >> 32) as u32
+    }
+}
+
+pub trait IntoSRangeU64 {
+    /// Returns (start, span) from a range object where span > 0.
+    fn into_bounds(self) -> (u64, u64);
+}
+
+impl IntoSRangeU64 for core::ops::Range<u64> {
+    fn into_bounds(self) -> (u64, u64) {
+        // sanity check
+        assert!(self.start < self.end, "gen_range: empty exclusive range");
+
+        let span = self.end - self.start;
+        (self.start, span)
+    }
+}
+
+impl IntoSRangeU64 for core::ops::RangeInclusive<u64> {
+    fn into_bounds(self) -> (u64, u64) {
+        let start = *self.start();
+        let end = *self.end();
+
+        // sanity check
+        assert!(start <= end, "gen_range: empty inclusive range");
+
+        // full 64-bit range
+        if start == 0 && end == u64::MAX {
+            (0, 0)
+        } else {
+            (start, end - start + 1)
+        }
+    }
+}
+
+pub trait IntoSRangeU32 {
+    /// Returns (start, span) from a range object where span > 0.
+    fn into_bounds(self) -> (u32, u32);
+}
+
+impl IntoSRangeU32 for core::ops::Range<u32> {
+    fn into_bounds(self) -> (u32, u32) {
+        // sanity check
+        assert!(self.start < self.end, "gen_range: empty exclusive range");
+
+        let span = self.end - self.start;
+        (self.start, span)
+    }
+}
+
+impl IntoSRangeU32 for core::ops::RangeInclusive<u32> {
+    fn into_bounds(self) -> (u32, u32) {
+        let start = *self.start();
+        let end = *self.end();
+
+        // sanity check
+        assert!(start <= end, "gen_range: empty inclusive range");
+
+        // full 64-bit range
+        if start == 0 && end == u32::MAX {
+            (0, 0)
+        } else {
+            (start, end - start + 1)
+        }
     }
 }
 
