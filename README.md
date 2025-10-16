@@ -28,13 +28,13 @@ Sphūr (स्फुर्) is a SIMD™ accelerated PRNG built on top of the
 
 <em>Read [Sphur](https://docs.rs/sphur/latest/sphur/struct.Sphur.html) docs for detailed usgae guide.</em>
 
-Install `Sphur` using following command,
+<h4>Install `Sphur` using following command,</h4>
 
 ```sh
-  cargo add sphur
+cargo add sphur
 ```
 
-Quick start guide,
+<h4>Quick start guide,</h4>
 
 ```rs
 use sphur::Sphur;

@@ -1,3 +1,10 @@
+### V-0.3.0
+
+- **BREAKING**: New and improved API for `Sphur`
+- Improved internal structure for optimal performance
+- Re-Impl of SSE SIMD engine w/ ISA and manual loop unrolling
+- Re-Impl of NEON SIMD engine w/ ISA and manual loop unrolling
+
 ### V-0.2.0
 
 - Update internal state structure `[u128; 16]` -> `[u64; 32]`
