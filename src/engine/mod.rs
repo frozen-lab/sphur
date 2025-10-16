@@ -1,6 +1,9 @@
 #[cfg(target_arch = "x86_64")]
 pub(crate) mod sse;
 
+#[cfg(target_arch = "aarch64")]
+pub(crate) mod neon;
+
 const PARITY: [u32; 4] = [0x00000001, 0x00000000, 0x00000000, 0x13c9e684];
 
 pub(crate) trait Engine<const N: usize, const N64: usize, const N32: usize> {
