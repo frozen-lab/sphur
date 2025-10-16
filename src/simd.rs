@@ -3,9 +3,15 @@ use crate::state::State;
 #[cfg(target_arch = "x86_64")]
 use crate::engine::sse::{SSE, SSE_N32, SSE_N64, SSE_STATE_LEN};
 
+#[cfg(target_arch = "aarch64")]
+use crate::engine::neon::{NEON, NEON_N32, NEON_N64, NEON_STATE_LEN};
+
 pub(crate) enum SIMD {
     #[cfg(target_arch = "x86_64")]
     Sse(State<SSE, SSE_STATE_LEN, SSE_N64, SSE_N32>),
+
+    #[cfg(target_arch = "aarch64")]
+    Neon(State<NEON, NEON_STATE_LEN, NEON_N64, NEON_N32>),
 }
 
 impl SIMD {
@@ -16,7 +22,7 @@ impl SIMD {
             ISA::SSE => unsafe { Self::Sse(State::<SSE, SSE_STATE_LEN, SSE_N64, SSE_N32>::new(seed)) },
 
             #[cfg(target_arch = "aarch64")]
-            ISA::NEON => todo!(),
+            ISA::NEON => unsafe { Self::Neon(State::<NEON, NEON_STATE_LEN, NEON_N64, NEON_N32>::new(seed)) },
         }
     }
 
@@ -27,7 +33,7 @@ impl SIMD {
             Self::Sse(state) => unsafe { state.gen_64() },
 
             #[cfg(target_arch = "aarch64")]
-            _ => todo!(),
+            Self::Neon(state) => unsafe { state.gen_64() },
         }
     }
 
@@ -38,7 +44,7 @@ impl SIMD {
             Self::Sse(state) => unsafe { state.gen_32() },
 
             #[cfg(target_arch = "aarch64")]
-            _ => todo!(),
+            Self::Neon(state) => unsafe { state.gen_32() },
         }
     }
 
@@ -51,7 +57,9 @@ impl SIMD {
             },
 
             #[cfg(target_arch = "aarch64")]
-            _ => todo!(),
+            Self::Neon(_) => unsafe {
+                self.fill_u64_buf(buf, buf.len());
+            },
         }
     }
 
@@ -64,11 +72,12 @@ impl SIMD {
             },
 
             #[cfg(target_arch = "aarch64")]
-            _ => todo!(),
+            Self::Neon(_) => unsafe {
+                self.fill_u32_buf(buf, buf.len());
+            },
         }
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn fill_u64_buf(&mut self, buf: &mut [u64], len: usize) {
@@ -81,10 +90,12 @@ impl SIMD {
         const UNROLL: usize = 4;
         const CHUNK: usize = BATCH * UNROLL;
 
-        // NOTE: This is valid cause, the funtion is only supposed to be executed/compiled
-        // when `SSE` is available!
         let state_ref = match self {
+            #[cfg(target_arch = "x86_64")]
             Self::Sse(s) => s,
+
+            #[cfg(target_arch = "aarch64")]
+            Self::Neon(n) => n,
         };
 
         let dst = buf.as_mut_ptr();
@@ -143,7 +154,6 @@ impl SIMD {
         }
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[inline(always)]
     #[allow(unsafe_op_in_unsafe_fn)]
     unsafe fn fill_u32_buf(&mut self, buf: &mut [u32], len: usize) {
@@ -156,10 +166,12 @@ impl SIMD {
         const UNROLL: usize = 4;
         const CHUNK: usize = BATCH * UNROLL;
 
-        // NOTE: This is valid cause, the funtion is only supposed to be executed/compiled
-        // when `SSE` is available!
         let state_ref = match self {
+            #[cfg(target_arch = "x86_64")]
             Self::Sse(s) => s,
+
+            #[cfg(target_arch = "aarch64")]
+            Self::Neon(n) => n,
         };
 
         let dst = buf.as_mut_ptr();
