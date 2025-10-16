@@ -86,7 +86,12 @@ impl SIMD {
             return;
         }
 
+        #[cfg(target_arch = "x86_64")]
         const BATCH: usize = SSE_N64;
+
+        #[cfg(target_arch = "aarch64")]
+        const BATCH: usize = NEON_N64;
+
         const UNROLL: usize = 4;
         const CHUNK: usize = BATCH * UNROLL;
 
@@ -162,7 +167,12 @@ impl SIMD {
             return;
         }
 
+        #[cfg(target_arch = "x86_64")]
         const BATCH: usize = SSE_N32;
+
+        #[cfg(target_arch = "aarch64")]
+        const BATCH: usize = NEON_N32;
+
         const UNROLL: usize = 4;
         const CHUNK: usize = BATCH * UNROLL;
 
