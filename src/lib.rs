@@ -2,6 +2,15 @@ mod engine;
 mod simd;
 mod state;
 
+// -----------------------------------------------------------------------------
+// Compile guard!
+// Sphūr only supports 64-bit architectures (x86_64 and AArch64).
+// -----------------------------------------------------------------------------
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+compile_error!(
+    "[ERROR]: Sphūr requires 64-bit architecture (x86_64 or AArch64). 32-bit targets (i386/armv7) are not supported."
+);
+
 pub struct Sphur {
     // NOTE (to compiler): I know what I’m doing. We will create internal mutability through
     // shared refs!
