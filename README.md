@@ -131,8 +131,8 @@ between threads concurrently.
 
 This design keeps the generator **lock-free w/ zero-overhead**, to facilitate good SIMD perf.
 
-For parallel workloads, you can simply create one `Sphur` instance per thread internally, each will
-maintain its own independent state, guaranteeing both **thread safety** and **zero overhead**.
+For parallel workloads, you can simply create one `Sphur` instance per thread. Internally, each will
+maintain its own independent state, guaranteeing both **thread safety** w/ **minimal overhead**.
 
 ## Internal Mutability
 
